@@ -22,12 +22,24 @@ namespace GtaPunta.Core
         private AudioSource _uiSource;
 
         private readonly Dictionary<string, AudioClip> _clips = new Dictionary<string, AudioClip>();
-        private bool _radioEnabled = true;
+        private int _radioStationIndex = 0; // 0 = Punta Summer FM, 1 = Mansa Sunset Chill, 2 = Off
         private bool _inVehicle;
         private bool _isPaused;
         private Transform _listenerTarget;
 
-        public bool RadioEnabled => _radioEnabled;
+        public bool RadioEnabled => _radioStationIndex < 2;
+        public string RadioStationName => _radioStationIndex switch
+        {
+            0 => "PUNTA SUMMER FM",
+            1 => "MANSA SUNSET CHILL",
+            _ => "RADIO APAGADA"
+        };
+        public string RadioShortBadge => _radioStationIndex switch
+        {
+            0 => "PUNTA FM",
+            1 => "MANSA CHILL",
+            _ => "RADIO OFF"
+        };
 
         private void Awake()
         {
@@ -58,7 +70,8 @@ namespace GtaPunta.Core
                 "Police_Siren_Loop",
                 "Wanted_Alert",
                 "Landmark_Chime",
-                "Radio_Punta_Summer_Loop"
+                "Radio_Punta_Summer_Loop",
+                "Radio_Mansa_Sunset_Chill"
             };
 
             foreach (var n in names)
@@ -117,7 +130,14 @@ namespace GtaPunta.Core
 
         public void ToggleRadio()
         {
-            _radioEnabled = !_radioEnabled;
+            _radioStationIndex = (_radioStationIndex + 1) % 3;
+            if (_radioSource == null) return;
+            string clipKey = _radioStationIndex == 1 ? "Radio_Mansa_Sunset_Chill" : "Radio_Punta_Summer_Loop";
+            if (_radioStationIndex < 2 && _clips.TryGetValue(clipKey, out var clip) && _radioSource.clip != clip)
+            {
+                _radioSource.clip = clip;
+                _radioSource.Play();
+            }
         }
 
         public float EffectiveSfxGain => masterGain * sfxGain * (_isPaused ? 0.4f : 1f);
@@ -147,7 +167,7 @@ namespace GtaPunta.Core
             if (_radioSource != null)
             {
                 bool titleMode = GameManager.Instance != null && GameManager.Instance.CurrentState == GameState.Title;
-                float targetRadio = (_inVehicle && _radioEnabled) ? 0.38f * EffectiveMusicGain
+                float targetRadio = (_inVehicle && RadioEnabled) ? 0.38f * EffectiveMusicGain
                                   : (titleMode ? 0.22f * EffectiveMusicGain : 0f);
                 _radioSource.volume = Mathf.Lerp(_radioSource.volume, targetRadio, Time.unscaledDeltaTime * 3.5f);
             }

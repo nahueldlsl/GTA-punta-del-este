@@ -106,7 +106,8 @@ namespace GtaPunta.Editor
                 vehicleTemplates["CitySedan"],
                 vehicleTemplates["BeachSUV"],
                 vehicleTemplates["Cabrio"],
-                vehicleTemplates["SportsGT"]
+                vehicleTemplates["SportsGT"],
+                vehicleTemplates["Taxi"]
             };
 
             var pedTemplate = BuildPedestrianTemplate();
@@ -174,7 +175,7 @@ namespace GtaPunta.Editor
 
         private static void ConfigureTextureImporters()
         {
-            string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { TexDir, "Assets/Resources/MapData", "Assets/Resources/UI" });
+            string[] guids = AssetDatabase.FindAssets("t:Texture", new[] { TexDir, "Assets/Art/HDRI", "Assets/Resources/MapData", "Assets/Resources/UI" });
             bool changed = false;
             foreach (var g in guids)
             {
@@ -183,6 +184,18 @@ namespace GtaPunta.Editor
                 if (imp == null) continue;
 
                 bool dirty = false;
+                if (path.EndsWith(".hdr", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (imp.textureShape != TextureImporterShape.Texture2D || imp.sRGBTexture || imp.maxTextureSize < 2048 || imp.wrapMode != TextureWrapMode.Clamp)
+                    {
+                        imp.textureShape = TextureImporterShape.Texture2D;
+                        imp.sRGBTexture = false;
+                        imp.maxTextureSize = 2048;
+                        imp.wrapMode = TextureWrapMode.Clamp;
+                        imp.mipmapEnabled = true;
+                        dirty = true;
+                    }
+                }
                 if (path.EndsWith("_Normal.png", StringComparison.OrdinalIgnoreCase) || path.Contains("Ocean_Normal_"))
                 {
                     if (imp.textureType != TextureImporterType.NormalMap)
@@ -191,7 +204,7 @@ namespace GtaPunta.Editor
                         dirty = true;
                     }
                 }
-                if (path.Contains("Palm_Frond_RGBA"))
+                if (path.Contains("Palm_Frond_RGBA") || path.Contains("Pine_Needles_RGBA") || path.Contains("Dune_Grass_RGBA"))
                 {
                     if (!imp.alphaIsTransparency)
                     {
@@ -302,31 +315,99 @@ namespace GtaPunta.Editor
             return mat;
         }
 
+        private static Material CreatePanoramicSkyMat(string assetName, string hdrFilename, float rotation, float exposure)
+        {
+            string path = $"{MatDir}/{assetName}.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            Shader sh = Shader.Find("Skybox/Panoramic");
+            if (mat == null)
+            {
+                mat = new Material(sh);
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            else
+            {
+                mat.shader = sh;
+            }
+            var tex = AssetDatabase.LoadAssetAtPath<Texture>($"Assets/Art/HDRI/{hdrFilename}");
+            if (tex != null) mat.SetTexture("_MainTex", tex);
+            mat.SetFloat("_Rotation", rotation);
+            mat.SetFloat("_Exposure", exposure);
+            mat.SetColor("_Tint", new Color(0.5f, 0.5f, 0.5f, 1f));
+            mat.SetFloat("_Mapping", 1f); // Latitude Longitude Layout
+            mat.SetFloat("_ImageType", 0f); // 360 Degrees
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
         private static Dictionary<string, Material> BuildMaterials()
         {
             var m = new Dictionary<string, Material>();
 
-            m["RoadAvenue"]   = CreateUrpLitMat("Mat_RoadAvenue", Color.white, "Road_Avenue_Albedo", "Road_Asphalt_Normal", null, null, 0f, 0.28f);
-            m["RoadStreet"]   = CreateUrpLitMat("Mat_RoadStreet", Color.white, "Road_Street_Albedo", "Road_Asphalt_Normal", null, null, 0f, 0.25f);
-            m["Sidewalk"]     = CreateUrpLitMat("Mat_Sidewalk", Color.white, "Sidewalk_Rambla_Albedo", "Sidewalk_Rambla_Normal", null, null, 0f, 0.24f);
-            m["Seawall"]      = CreateUrpLitMat("Mat_Seawall", Color.white, "Seawall_Granite_Albedo", "Seawall_Granite_Normal", null, null, 0f, 0.20f);
-            m["GlassTower"]   = CreateUrpLitMat("Mat_FacadeGlassTower", Color.white, "Facade_GlassTower_Albedo", "Facade_GlassTower_Normal", "Facade_GlassTower_Metallic", "Facade_GlassTower_Emission", 0.45f, 0.85f);
-            m["Gorlero"]      = CreateUrpLitMat("Mat_FacadeGorlero", Color.white, "Facade_Gorlero_Albedo", "Facade_Gorlero_Normal", null, "Facade_Gorlero_Emission", 0.05f, 0.32f);
-            m["Villa"]        = CreateUrpLitMat("Mat_CoastalVilla", Color.white, "Stucco_Coastal_Albedo", "Stucco_Coastal_Normal", null, "Stucco_Coastal_Emission", 0.02f, 0.25f);
-            m["ConcreteRoof"] = CreateUrpLitMat("Mat_ConcreteRoof", Palette.CreamConcrete, "Concrete_Sculpture_Albedo", "Concrete_Sculpture_Normal", null, null, 0f, 0.20f);
-            m["Sculpture"]    = CreateUrpLitMat("Mat_LosDedos", Color.white, "Concrete_Sculpture_Albedo", "Concrete_Sculpture_Normal", null, null, 0.02f, 0.22f);
-            m["WoodDock"]     = CreateUrpLitMat("Mat_WoodDock", Color.white, "Wood_Dock_Albedo", "Wood_Dock_Normal", null, null, 0f, 0.24f);
-            m["RockCoastal"]  = CreateUrpLitMat("Mat_RockCoastal", Color.white, "Rock_Coastal_Albedo", "Rock_Coastal_Normal", null, null, 0.02f, 0.18f);
-            m["PalmBark"]     = CreateUrpLitMat("Mat_PalmBark", Color.white, "Palm_Bark_Albedo", "Palm_Bark_Normal", null, null, 0f, 0.15f);
-            m["PalmFrond"]    = CreateUrpLitMat("Mat_PalmFrond", Color.white, "Palm_Frond_RGBA", null, null, null, 0f, 0.28f, null, true);
-            m["AwningBlue"]   = CreateUrpLitMat("Mat_AwningBlue", Palette.Hex("#1E649B"), null, null, null, null, 0f, 0.22f);
-            m["AwningCoral"]  = CreateUrpLitMat("Mat_AwningCoral", Palette.Hex("#C8523B"), null, null, null, null, 0f, 0.22f);
-            m["Sand"]         = CreateUrpLitMat("Mat_SandPunta", Color.white, "Sand_Punta_Albedo", "Sand_Punta_Normal", null, null, 0f, 0.14f);
-            m["Grass"]        = CreateUrpLitMat("Mat_ParkGrass", Color.white, "Park_Grass_Albedo", "Park_Grass_Normal", null, null, 0f, 0.15f);
+            // Photographic Poly Haven Roads, Sidewalks, Plazas & Coastal Surfaces
+            m["RoadAvenue"]    = CreateUrpLitMat("Mat_RoadAvenue", Color.white, "Road_Avenue_Albedo", "Road_Asphalt_Normal", null, null, 0f, 0.28f);
+            m["RoadStreet"]    = CreateUrpLitMat("Mat_RoadStreet", Color.white, "Road_Street_Albedo", "Road_Asphalt_Normal", null, null, 0f, 0.24f);
+            m["RoadCrosswalk"] = CreateUrpLitMat("Mat_RoadCrosswalk", Color.white, "Road_Crosswalk_Albedo", "Road_Asphalt_Normal", null, null, 0f, 0.26f);
+            m["Sidewalk"]      = CreateUrpLitMat("Mat_Sidewalk", Color.white, "PH_Cobble_Albedo", "PH_Cobble_Normal", null, null, 0f, 0.24f);
+            m["BrickPlaza"]    = CreateUrpLitMat("Mat_BrickPlaza", Color.white, "PH_BrickPave_Albedo", "PH_BrickPave_Normal", null, null, 0f, 0.22f);
+            m["ConcreteQuay"]  = CreateUrpLitMat("Mat_ConcreteQuay", new Color(0.92f, 0.91f, 0.88f), "PH_Concrete_Albedo", "PH_Concrete_Normal", null, null, 0f, 0.24f);
+            m["Seawall"]       = CreateUrpLitMat("Mat_Seawall", Color.white, "Seawall_Granite_Albedo", "Seawall_Granite_Normal", null, null, 0f, 0.20f);
 
-            // Signs
+            // 5 Distinct Punta del Este Architectural Facades (breaks ALL v1 wallpaper repetition!)
+            m["GlassTower"]    = CreateUrpLitMat("Mat_FacadeLuxuryWhite", Color.white, "Facade_LuxuryWhiteGlass_Albedo", "Facade_LuxuryWhiteGlass_Normal", "Facade_LuxuryWhiteGlass_Metallic", "Facade_LuxuryWhiteGlass_Emission", 0.35f, 0.80f);
+            m["BronzeTower"]   = CreateUrpLitMat("Mat_FacadeBronzeTower", Color.white, "Facade_BronzeTower_Albedo", "Facade_BronzeTower_Normal", "Facade_BronzeTower_Metallic", "Facade_BronzeTower_Emission", 0.45f, 0.82f);
+            m["TerracottaRes"] = CreateUrpLitMat("Mat_FacadeTerracotta", Color.white, "Facade_TerracottaResort_Albedo", "Facade_TerracottaResort_Normal", "Facade_TerracottaResort_Metallic", "Facade_TerracottaResort_Emission", 0.15f, 0.42f);
+            m["Gorlero"]       = CreateUrpLitMat("Mat_FacadeGorleroArcade", Color.white, "Facade_GorleroArcade_Albedo", "Facade_GorleroArcade_Normal", "Facade_GorleroArcade_Metallic", "Facade_GorleroArcade_Emission", 0.12f, 0.45f);
+            m["Villa"]         = CreateUrpLitMat("Mat_FacadePeninsulaVilla", Color.white, "Facade_PeninsulaVilla_Albedo", "Facade_PeninsulaVilla_Normal", null, "Facade_PeninsulaVilla_Emission", 0.02f, 0.28f);
+
+            m["ConcreteRoof"]  = CreateUrpLitMat("Mat_ConcreteRoof", Palette.CreamConcrete, "PH_Concrete_Albedo", "PH_Concrete_Normal", null, null, 0f, 0.20f);
+            m["TerracottaRoof"]= CreateUrpLitMat("Mat_TerracottaRoof", new Color(0.72f, 0.33f, 0.20f), "PH_BrickPave_Albedo", "PH_BrickPave_Normal", null, null, 0f, 0.26f);
+            m["DarkPlinth"]    = CreateUrpLitMat("Mat_DarkPlinth", new Color(0.24f, 0.27f, 0.31f), "PH_Plaster_Albedo", "PH_Plaster_Normal", null, null, 0.05f, 0.32f);
+            m["BalconyLedge"]  = CreateUrpLitMat("Mat_BalconyLedge", new Color(0.95f, 0.94f, 0.91f), "PH_Concrete_Albedo", "PH_Concrete_Normal", null, null, 0.02f, 0.35f);
+            m["Sculpture"]     = CreateUrpLitMat("Mat_LosDedos", new Color(0.95f, 0.92f, 0.86f), "PH_Plaster_Albedo", "PH_Concrete_Normal", null, null, 0.02f, 0.24f);
+            m["WoodDock"]      = CreateUrpLitMat("Mat_WoodDock", Color.white, "PH_WoodDeck_Albedo", "PH_WoodDeck_Normal", null, null, 0f, 0.26f);
+
+            // Poly Haven Photogrammetry Rock & Bench Materials
+            m["RockCoastal"]   = CreateUrpLitMat("Mat_RockCoastal", Color.white, "PH_coast_land_rocks_02_Albedo", "PH_coast_land_rocks_02_Normal", null, null, 0.02f, 0.20f);
+            m["PH_Rock02"]     = CreateUrpLitMat("Mat_PH_Rock02", Color.white, "PH_coast_land_rocks_02_Albedo", "PH_coast_land_rocks_02_Normal", null, null, 0.02f, 0.22f);
+            m["PH_Rock03"]     = CreateUrpLitMat("Mat_PH_Rock03", Color.white, "PH_coast_land_rocks_03_Albedo", "PH_coast_land_rocks_03_Normal", null, null, 0.02f, 0.22f);
+            m["PH_Rock04"]     = CreateUrpLitMat("Mat_PH_Rock04", Color.white, "PH_coast_land_rocks_04_Albedo", "PH_coast_land_rocks_04_Normal", null, null, 0.02f, 0.22f);
+            m["PH_Boulder"]    = CreateUrpLitMat("Mat_PH_Boulder", Color.white, "PH_boulder_01_Albedo", "PH_boulder_01_Normal", null, null, 0.02f, 0.20f);
+            m["PH_Bench"]      = CreateUrpLitMat("Mat_PH_Bench", Color.white, "PH_painted_wooden_bench_Albedo", "PH_painted_wooden_bench_Normal", null, null, 0.02f, 0.30f);
+
+            // Vegetation (Alpha-Cutout Double-Sided Botanical Foliage)
+            m["PalmBark"]      = CreateUrpLitMat("Mat_PalmBark", Color.white, "Palm_Bark_Albedo", "Palm_Bark_Normal", null, null, 0f, 0.16f);
+            m["PalmFrond"]     = CreateUrpLitMat("Mat_PalmFrond", Color.white, "Palm_Frond_RGBA", null, null, null, 0f, 0.28f, null, true);
+            m["PineNeedles"]   = CreateUrpLitMat("Mat_PineNeedles", Color.white, "Pine_Needles_RGBA", null, null, null, 0f, 0.22f, null, true);
+            m["DuneGrass"]     = CreateUrpLitMat("Mat_DuneGrass", Color.white, "Dune_Grass_RGBA", null, null, null, 0f, 0.18f, null, true);
+            m["AwningBlue"]    = CreateUrpLitMat("Mat_AwningBlue", Palette.Hex("#1E649B"), null, null, null, null, 0f, 0.22f);
+            m["AwningCoral"]   = CreateUrpLitMat("Mat_AwningCoral", Palette.Hex("#C8523B"), null, null, null, null, 0f, 0.22f);
+            m["Sand"]          = CreateUrpLitMat("Mat_SandPunta", Color.white, "PH_Sand_Albedo", "PH_Sand_Normal", null, null, 0f, 0.16f);
+            m["Grass"]         = CreateUrpLitMat("Mat_ParkGrass", Color.white, "PH_Grass_Albedo", "PH_Grass_Normal", null, null, 0f, 0.16f);
+
+            // Street & Landmark Signs + Illuminated Iconic Punta del Este Storefront Signs!
             foreach (var sname in new[] { "Sign_Gorlero", "Sign_Rambla", "Sign_Puerto", "Sign_Brava", "Sign_Faro", "Sign_Mansa" })
                 m[sname] = CreateUrpLitMat("Mat_" + sname, Color.white, sname, null, null, null, 0.05f, 0.45f);
+
+            foreach (var shopSign in new[] { "Sign_Enjoy", "Sign_ChurrosManolo", "Sign_CafeGorlero", "Sign_Heladeria", "Sign_CasinoNogaro", "Sign_Boutique20", "Sign_ParrillaPuerto", "Sign_YachtClub" })
+                m[shopSign] = CreateUrpLitMat("Mat_" + shopSign, Color.white, shopSign, null, null, shopSign, 0.05f, 0.42f);
+
+            // Tire Skidmark material
+            string skidPath = $"{MatDir}/Mat_TireSkidmark.mat";
+            var skidMat = AssetDatabase.LoadAssetAtPath<Material>(skidPath);
+            if (skidMat == null)
+            {
+                skidMat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+                AssetDatabase.CreateAsset(skidMat, skidPath);
+            }
+            skidMat.color = new Color(0.06f, 0.06f, 0.07f, 0.62f);
+            skidMat.SetFloat("_Surface", 1f);
+            skidMat.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            skidMat.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            skidMat.SetInt("_ZWrite", 0);
+            skidMat.renderQueue = 2950;
+            EditorUtility.SetDirty(skidMat);
+            m["Skidmark"] = skidMat;
 
             // Custom Dual-Character Punta del Este Ocean Material
             string oceanMatPath = $"{MatDir}/Mat_PuntaOcean.mat";
@@ -351,27 +432,11 @@ namespace GtaPunta.Editor
             EditorUtility.SetDirty(oceanMat);
             m["Ocean"] = oceanMat;
 
-            // Procedural Coastal Skybox Material
-            string skyPath = $"{MatDir}/Mat_PuntaSkybox.mat";
-            var skyMat = AssetDatabase.LoadAssetAtPath<Material>(skyPath);
-            Shader skyShader = Shader.Find("Skybox/Procedural");
-            if (skyMat == null)
-            {
-                skyMat = new Material(skyShader);
-                AssetDatabase.CreateAsset(skyMat, skyPath);
-            }
-            else
-            {
-                skyMat.shader = skyShader;
-            }
-            skyMat.SetFloat("_SunSize", 0.045f);
-            skyMat.SetFloat("_SunSizeConvergence", 6f);
-            skyMat.SetFloat("_AtmosphereThickness", 0.95f);
-            skyMat.SetColor("_SkyTint", Palette.SkyZenithDay);
-            skyMat.SetColor("_GroundColor", Palette.SkyHorizonDay);
-            skyMat.SetFloat("_Exposure", 1.25f);
-            EditorUtility.SetDirty(skyMat);
-            m["Skybox"] = skyMat;
+            // 3 Real Photographic Poly Haven PureSky 2K HDRI Panoramic Skyboxes (Day, Mansa Sunset, Coastal Night)!
+            m["SkyboxDay"]    = CreatePanoramicSkyMat("Mat_Sky_Day_Punta",     "Sky_Day_Punta.hdr",     145f, 1.05f);
+            m["SkyboxSunset"] = CreatePanoramicSkyMat("Mat_Sky_Sunset_Mansa",  "Sky_Sunset_Mansa.hdr",  245f, 1.15f);
+            m["SkyboxNight"]  = CreatePanoramicSkyMat("Mat_Sky_Night_Coastal", "Sky_Night_Coastal.hdr",  60f, 0.85f);
+            m["Skybox"]       = m["SkyboxDay"];
 
             return m;
         }
@@ -418,13 +483,13 @@ namespace GtaPunta.Editor
                     heights[z, x] = flat[z * res + x];
             td.SetHeights(0, 0, heights);
 
-            // 4 PBR Terrain Layers: 0=Punta Sand, 1=Rambla Urban Pavement, 2=Park Grass, 3=Coastal Granite Rock
+            // 4 Real Photographic Poly Haven PBR Terrain Layers: 0=Punta Sand, 1=Cobble Urban Plaza, 2=Park Grass, 3=Coastal Granite Rock
             td.terrainLayers = new[]
             {
-                CreateTerrainLayer("SandPunta", "Sand_Punta_Albedo", "Sand_Punta_Normal", 14f),
-                CreateTerrainLayer("UrbanPavement", "Sidewalk_Rambla_Albedo", "Sidewalk_Rambla_Normal", 9f),
-                CreateTerrainLayer("ParkGrass", "Park_Grass_Albedo", "Park_Grass_Normal", 12f),
-                CreateTerrainLayer("CoastalRock", "Rock_Coastal_Albedo", "Rock_Coastal_Normal", 16f),
+                CreateTerrainLayer("SandPunta", "PH_Sand_Albedo", "PH_Sand_Normal", 12f),
+                CreateTerrainLayer("UrbanPavement", "PH_Cobble_Albedo", "PH_Cobble_Normal", 8f),
+                CreateTerrainLayer("ParkGrass", "PH_Grass_Albedo", "PH_Grass_Normal", 10f),
+                CreateTerrainLayer("CoastalRock", "PH_coast_land_rocks_02_Albedo", "PH_coast_land_rocks_02_Normal", 12f),
             };
 
             // Apply 1024x1024 splatmap cleanly onto alphamapResolution = 512
@@ -536,6 +601,15 @@ namespace GtaPunta.Editor
             gForest.GetComponent<MeshRenderer>().sharedMaterial = mats["Grass"];
         }
 
+        private struct ProcessedRoad
+        {
+            public List<Vector3> dense;
+            public List<int> nodeIds;
+            public float width;
+            public bool isRambla;
+            public bool isAve;
+        }
+
         private static void BuildRoadsAndGraph(Dictionary<string, object> mapRaw, Terrain terrain, Dictionary<string, Material> mats, RoadNetworkRuntime roadNet)
         {
             var roadsList = mapRaw["roads"] as List<object>;
@@ -545,6 +619,7 @@ namespace GtaPunta.Editor
             var strBuilder = new MeshBuilder();
             var swBuilder  = new MeshBuilder();
             var wallBuilder = new MeshBuilder();
+            var xwalkBuilder = new MeshBuilder();
 
             var nodeSnap = new Dictionary<Vector2Int, int>();
             int GetOrAddNode(Vector3 pos, string rname, bool isRambla, bool isAve)
@@ -570,6 +645,8 @@ namespace GtaPunta.Editor
                 return id;
             }
 
+            // PASS 1: Build complete road connectivity graph FIRST so we know every single intersection accurately!
+            var processed = new List<ProcessedRoad>();
             foreach (var item in roadsList)
             {
                 var r = item as Dictionary<string, object>;
@@ -579,15 +656,12 @@ namespace GtaPunta.Editor
                 float width = Convert.ToSingle(r["width"]);
                 var ptsRaw = r["points"] as List<object>;
                 if (ptsRaw == null || ptsRaw.Count < 2) continue;
+                if (rclass == "service") continue;
 
                 bool isRambla = rclass == "rambla";
                 bool isAve = rclass == "avenue" || isRambla;
-                // Skip unpaved beach service tracks near Los Dedos so golden sand stays clean!
-                if (rclass == "service") continue;
-                var targetMesh = isAve ? aveBuilder : strBuilder;
+                float yLift = isAve ? 0.25f : 0.16f;
 
-                // Convert polyline to world 3D points cleanly draped above terrain
-                float yLift = isAve ? 0.24f : 0.16f;
                 var pts = new List<Vector3>(ptsRaw.Count);
                 foreach (var po in ptsRaw)
                 {
@@ -600,19 +674,56 @@ namespace GtaPunta.Editor
                 }
                 if (pts.Count < 2) continue;
 
-                // Subdivide every 10m so roads hug terrain contour cleanly with zero clipping!
                 var dense = SubdividePolyline(pts, terrain, yLift, 10f);
+                var nIds = new List<int>(dense.Count);
+                int prevNode = -1;
+                for (int i = 0; i < dense.Count; i++)
+                {
+                    int n = GetOrAddNode(dense[i], rname, isRambla, isAve);
+                    nIds.Add(n);
+                    if (prevNode >= 0 && prevNode != n)
+                    {
+                        if (!roadNet.roadNodes[prevNode].neighbors.Contains(n)) roadNet.roadNodes[prevNode].neighbors.Add(n);
+                        if (!roadNet.roadNodes[n].neighbors.Contains(prevNode)) roadNet.roadNodes[n].neighbors.Add(prevNode);
+                    }
+                    prevNode = n;
+                }
+                processed.Add(new ProcessedRoad { dense = dense, nodeIds = nIds, width = width, isRambla = isRambla, isAve = isAve });
+            }
 
-                // Extrude road ribbon (CLOCKWISE from above -> +Y upward normal!) + raised sidewalks + Rambla stone seawall
-                float halfW = width * 0.5f;
-                float swW = isRambla ? 3.4f : (isAve ? 2.6f : 1.7f);
+            // Collect intersection centers so sidewalks NEVER slice across any cross-street!
+            var junctions = new List<Vector2>();
+            for (int i = 0; i < roadNet.roadNodes.Count; i++)
+            {
+                if (roadNet.roadNodes[i].neighbors.Count >= 3)
+                    junctions.Add(new Vector2(roadNet.roadNodes[i].position.x, roadNet.roadNodes[i].position.z));
+            }
+
+            bool NearAnyJunction(Vector3 p, float radius)
+            {
+                float r2 = radius * radius;
+                for (int j = 0; j < junctions.Count; j++)
+                {
+                    float dx = p.x - junctions[j].x;
+                    float dz = p.z - junctions[j].y;
+                    if (dx * dx + dz * dz < r2) return true;
+                }
+                return false;
+            }
+
+            // PASS 2: Extrude clean asphalt, cleanly clipped sidewalks, stone seawalls & zebra crosswalks!
+            int xwalkCount = 0;
+            foreach (var pr in processed)
+            {
+                var targetMesh = pr.isAve ? aveBuilder : strBuilder;
+                float halfW = pr.width * 0.5f;
+                float swW = pr.isRambla ? 3.5f : (pr.isAve ? 2.7f : 1.75f);
                 float vDist = 0f;
 
-                int prevNode = -1;
-                for (int i = 0; i < dense.Count - 1; i++)
+                for (int i = 0; i < pr.dense.Count - 1; i++)
                 {
-                    Vector3 a = dense[i];
-                    Vector3 b = dense[i + 1];
+                    Vector3 a = pr.dense[i];
+                    Vector3 b = pr.dense[i + 1];
                     Vector3 seg = b - a;
                     float len = seg.magnitude;
                     if (len < 0.4f) continue;
@@ -624,45 +735,32 @@ namespace GtaPunta.Editor
                     float v1 = (vDist + len) / 12f;
                     vDist += len;
 
-                    // Road asphalt quad (strictly +Y upward facing in Unity left-handed coords!)
+                    // Crisp asphalt ribbon
                     targetMesh.AddQuadUp(
                         a - right * halfW, b - right * halfW,
                         b + right * halfW, a + right * halfW,
                         new Vector2(0, v0), new Vector2(0, v1), new Vector2(1, v1), new Vector2(1, v0));
 
-                    // Populate connected drivable road graph first so we know intersection nodes cleanly
-                    int nA = GetOrAddNode(a, rname, isRambla, isAve);
-                    int nB = GetOrAddNode(b, rname, isRambla, isAve);
-                    if (nA != nB)
-                    {
-                        if (!roadNet.roadNodes[nA].neighbors.Contains(nB)) roadNet.roadNodes[nA].neighbors.Add(nB);
-                        if (!roadNet.roadNodes[nB].neighbors.Contains(nA)) roadNet.roadNodes[nB].neighbors.Add(nA);
-                    }
-                    if (prevNode >= 0 && prevNode != nA)
-                    {
-                        if (!roadNet.roadNodes[prevNode].neighbors.Contains(nA)) roadNet.roadNodes[prevNode].neighbors.Add(nA);
-                        if (!roadNet.roadNodes[nA].neighbors.Contains(prevNode)) roadNet.roadNodes[nA].neighbors.Add(prevNode);
-                    }
-                    prevNode = nB;
+                    Vector3 mid = (a + b) * 0.5f;
+                    bool blockedByJunction = i == 0 || i == pr.dense.Count - 2 ||
+                                             NearAnyJunction(a, halfW + 5.5f) ||
+                                             NearAnyJunction(b, halfW + 5.5f) ||
+                                             NearAnyJunction(mid, halfW + 5.0f);
 
-                    // Raised sidewalks slightly below asphalt edges so intersections NEVER get barred by sidewalk strips!
-                    bool nearIntersection = i == 0 || i == dense.Count - 2 ||
-                                            roadNet.roadNodes[nA].neighbors.Count >= 3 ||
-                                            roadNet.roadNodes[nB].neighbors.Count >= 3;
-                    float swY = nearIntersection ? -0.05f : 0.05f;
-                    swBuilder.AddQuadUp(
-                        a - right * (halfW + swW) + Vector3.up * swY, b - right * (halfW + swW) + Vector3.up * swY,
-                        b - right * halfW + Vector3.up * swY, a - right * halfW + Vector3.up * swY,
-                        new Vector2(0, v0 * 2), new Vector2(0, v1 * 2), new Vector2(1, v1 * 2), new Vector2(1, v0 * 2));
-                    swBuilder.AddQuadUp(
-                        a + right * halfW + Vector3.up * swY, b + right * halfW + Vector3.up * swY,
-                        b + right * (halfW + swW) + Vector3.up * swY, a + right * (halfW + swW) + Vector3.up * swY,
-                        new Vector2(0, v0 * 2), new Vector2(0, v1 * 2), new Vector2(1, v1 * 2), new Vector2(1, v0 * 2));
-
-                    // Stone curb / Rambla seawall skirts only on clean outer road runs (never across intersections!)
-                    if (!nearIntersection)
+                    if (!blockedByJunction)
                     {
-                        float drop = isRambla ? 1.85f : 0.55f;
+                        float swY = 0.09f;
+                        swBuilder.AddQuadUp(
+                            a - right * (halfW + swW) + Vector3.up * swY, b - right * (halfW + swW) + Vector3.up * swY,
+                            b - right * halfW + Vector3.up * swY, a - right * halfW + Vector3.up * swY,
+                            new Vector2(0, v0 * 2.2f), new Vector2(0, v1 * 2.2f), new Vector2(1, v1 * 2.2f), new Vector2(1, v0 * 2.2f));
+                        swBuilder.AddQuadUp(
+                            a + right * halfW + Vector3.up * swY, b + right * halfW + Vector3.up * swY,
+                            b + right * (halfW + swW) + Vector3.up * swY, a + right * (halfW + swW) + Vector3.up * swY,
+                            new Vector2(0, v0 * 2.2f), new Vector2(0, v1 * 2.2f), new Vector2(1, v1 * 2.2f), new Vector2(1, v0 * 2.2f));
+
+                        // Curb / Rambla stone seawall drops cleanly along both sidewalk edges
+                        float drop = pr.isRambla ? 1.85f : 0.55f;
                         for (int side = -1; side <= 1; side += 2)
                         {
                             Vector3 outerA = a + right * (side * (halfW + swW));
@@ -673,9 +771,19 @@ namespace GtaPunta.Editor
                                 new Vector2(v0 * 2, 1), new Vector2(v1 * 2, 1), new Vector2(v1 * 2, 0), new Vector2(v0 * 2, 0));
                         }
                     }
+                    else if (pr.isAve && len >= 4.5f && xwalkCount < 55 && (i % 2 == 1))
+                    {
+                        // Painted white Uruguayan zebra crosswalk strip right before major intersections!
+                        Vector3 cwA = mid - dir * 2.2f + Vector3.up * 0.035f;
+                        Vector3 cwB = mid + dir * 2.2f + Vector3.up * 0.035f;
+                        xwalkBuilder.AddQuadUp(
+                            cwA - right * (halfW * 0.94f), cwB - right * (halfW * 0.94f),
+                            cwB + right * (halfW * 0.94f), cwA + right * (halfW * 0.94f),
+                            new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0));
+                        xwalkCount++;
+                    }
 
-                    // Collect sidewalk pedestrian stroll points along Gorlero, Calle 20 & Rambla
-                    if (i % 3 == 0 && (isAve || roadNet.pedestrianPoints.Count < 140))
+                    if (i % 3 == 0 && (pr.isAve || roadNet.pedestrianPoints.Count < 160))
                     {
                         Vector3 pedPt = a + right * (halfW + swW * 0.55f) + Vector3.up * 0.25f;
                         roadNet.pedestrianPoints.Add(pedPt);
@@ -686,6 +794,7 @@ namespace GtaPunta.Editor
             var roadsRoot = new GameObject("City_RoadNetwork");
             CreateMeshChild(roadsRoot.transform, "Roads_Avenues_Rambla", aveBuilder.Build("Mesh_RoadsAvenue"), mats["RoadAvenue"], true);
             CreateMeshChild(roadsRoot.transform, "Roads_PeninsulaStreets", strBuilder.Build("Mesh_RoadsStreet"), mats["RoadStreet"], true);
+            CreateMeshChild(roadsRoot.transform, "Roads_ZebraCrosswalks", xwalkBuilder.Build("Mesh_Crosswalks"), mats["RoadCrosswalk"], false);
             CreateMeshChild(roadsRoot.transform, "Sidewalks_Promenade", swBuilder.Build("Mesh_Sidewalks"), mats["Sidewalk"], true);
             CreateMeshChild(roadsRoot.transform, "Rambla_Seawalls", wallBuilder.Build("Mesh_Seawalls"), mats["Seawall"], true);
         }
@@ -716,12 +825,17 @@ namespace GtaPunta.Editor
             var bList = mapRaw["buildings"] as List<object>;
             if (bList == null) return;
 
-            var glassWalls = new MeshBuilder();
-            var gorleroWalls = new MeshBuilder();
-            var villaWalls = new MeshBuilder();
+            var luxuryWhiteWalls = new MeshBuilder();
+            var bronzeWalls      = new MeshBuilder();
+            var terracottaWalls  = new MeshBuilder();
+            var gorleroWalls     = new MeshBuilder();
+            var villaWalls       = new MeshBuilder();
+            var plinthWalls      = new MeshBuilder();
+            var balconyLedges    = new MeshBuilder();
             var roofsAndCornices = new MeshBuilder();
-            var awningsBlue = new MeshBuilder();
-            var awningsCoral = new MeshBuilder();
+            var tileRoofs        = new MeshBuilder();
+            var awningsBlue      = new MeshBuilder();
+            var awningsCoral     = new MeshBuilder();
 
             int count = 0;
             foreach (var item in bList)
@@ -745,17 +859,37 @@ namespace GtaPunta.Editor
                     var pa = po as List<object>;
                     poly.Add(new Vector2(Convert.ToSingle(pa[0]), Convert.ToSingle(pa[1])));
                 }
-                // Ensure consistent CCW winding for outward-facing normals
                 if (SignedPolygonArea(poly) < 0f) poly.Reverse();
 
-                float baseY = SampleTerrainY(terrain, cx, cz) - 1.2f; // sunk slightly into ground so zero slope gap!
+                float baseY = SampleTerrainY(terrain, cx, cz) - 1.2f;
                 float topY = baseY + height + 1.2f;
 
-                var wallTarget = style == "glass_tower" ? glassWalls : (style == "coastal_villa" ? villaWalls : gorleroWalls);
-                float uScale = style == "glass_tower" ? 0.055f : 0.085f;
-                float vScale = style == "glass_tower" ? 0.038f : 0.065f;
+                // Deterministic hash breaks ALL architectural uniformity across the 731 real OSM lots!
+                int lotHash = Mathf.Abs(Mathf.RoundToInt(cx * 13.7f + cz * 7.3f) + count);
+                MeshBuilder wallTarget;
+                bool isTower = style == "glass_tower" || height >= 19f;
+                bool isVilla = style == "coastal_villa" && height < 12.5f;
 
-                // Extrude perimeter walls
+                if (isTower)
+                {
+                    int mod = lotHash % 3;
+                    wallTarget = mod == 0 ? luxuryWhiteWalls : (mod == 1 ? bronzeWalls : terracottaWalls);
+                }
+                else if (isVilla)
+                {
+                    wallTarget = (lotHash % 3 == 0) ? terracottaWalls : villaWalls;
+                }
+                else
+                {
+                    int mod = lotHash % 4;
+                    wallTarget = mod == 0 ? gorleroWalls : (mod == 1 ? terracottaWalls : (mod == 2 ? luxuryWhiteWalls : bronzeWalls));
+                }
+
+                float uScale = isTower ? 0.048f : 0.072f;
+                float vScale = isTower ? 0.036f : 0.056f;
+                float plinthH = (!isVilla && height >= 10f) ? 3.8f : 0f;
+                float wallStartY = baseY + plinthH;
+
                 for (int i = 0; i < poly.Count; i++)
                 {
                     Vector2 p0 = poly[i];
@@ -763,106 +897,147 @@ namespace GtaPunta.Editor
                     float edgeLen = Vector2.Distance(p0, p1);
                     if (edgeLen < 0.4f) continue;
 
-                    Vector3 b0 = new Vector3(p0.x, baseY, p0.y);
-                    Vector3 b1 = new Vector3(p1.x, baseY, p1.y);
+                    Vector2 ed = (p1 - p0).normalized;
+                    Vector3 outward = new Vector3(ed.y, 0f, -ed.x);
+
+                    // Ground-floor commercial plinth band for Gorlero/Rambla buildings
+                    if (plinthH > 0.1f)
+                    {
+                        Vector3 pb0 = new Vector3(p0.x, baseY, p0.y) + outward * 0.15f;
+                        Vector3 pb1 = new Vector3(p1.x, baseY, p1.y) + outward * 0.15f;
+                        Vector3 pt1 = new Vector3(p1.x, wallStartY, p1.y) + outward * 0.15f;
+                        Vector3 pt0 = new Vector3(p0.x, wallStartY, p0.y) + outward * 0.15f;
+                        plinthWalls.AddQuadFacing(pb0, pb1, pt1, pt0,
+                            Vector2.zero, new Vector2(edgeLen * 0.15f, 0),
+                            new Vector2(edgeLen * 0.15f, 1), Vector2.up, outward);
+                    }
+
+                    Vector3 b0 = new Vector3(p0.x, wallStartY, p0.y);
+                    Vector3 b1 = new Vector3(p1.x, wallStartY, p1.y);
                     Vector3 t1 = new Vector3(p1.x, topY, p1.y);
                     Vector3 t0 = new Vector3(p0.x, topY, p0.y);
 
-                    // Extrude perimeter walls with ENFORCED OUTWARD-FACING NORMALS (solid volumetric buildings!)
-                    Vector2 ed = (p1 - p0).normalized;
-                    Vector3 outward = new Vector3(ed.y, 0f, -ed.x);
                     wallTarget.AddQuadFacing(b0, b1, t1, t0,
                         new Vector2(0, 0), new Vector2(edgeLen * uScale, 0),
-                        new Vector2(edgeLen * uScale, height * vScale), new Vector2(0, height * vScale),
+                        new Vector2(edgeLen * uScale, (topY - wallStartY) * vScale), new Vector2(0, (topY - wallStartY) * vScale),
                         outward);
 
-                    // Architectural roof cornice overhang rim (solid outward-facing!)
-                    float overhang = style == "glass_tower" ? 0.65f : 0.35f;
+                    // Real 3D projecting coastal balcony slabs on towers & mid-rises (casts crisp shadows + SSAO!)
+                    if (height >= 14f && edgeLen > 4.5f)
+                    {
+                        float balcDepth = isTower ? 0.95f : 0.65f;
+                        float stepY = 4.2f;
+                        for (float by = wallStartY + 3.2f; by < topY - 1.5f; by += stepY)
+                        {
+                            Vector3 bl0 = new Vector3(p0.x, by, p0.y) + outward * balcDepth;
+                            Vector3 bl1 = new Vector3(p1.x, by, p1.y) + outward * balcDepth;
+                            Vector3 bl0u = bl0 + Vector3.up * 0.36f;
+                            Vector3 bl1u = bl1 + Vector3.up * 0.36f;
+                            Vector3 bi0u = new Vector3(p0.x, by + 0.36f, p0.y);
+                            Vector3 bi1u = new Vector3(p1.x, by + 0.36f, p1.y);
+                            balconyLedges.AddQuadFacing(bl0, bl1, bl1u, bl0u, Vector2.zero, Vector2.right, Vector2.one, Vector2.up, outward);
+                            balconyLedges.AddQuadUp(bi0u, bi1u, bl1u, bl0u, Vector2.zero, Vector2.right, Vector2.one, Vector2.up);
+                        }
+                    }
+
+                    // Architectural roof cornice overhang rim
+                    float overhang = isTower ? 0.72f : 0.42f;
                     Vector3 c0 = t0 + outward * overhang;
                     Vector3 c1 = t1 + outward * overhang;
-                    Vector3 c0u = c0 + Vector3.up * 0.55f;
-                    Vector3 c1u = c1 + Vector3.up * 0.55f;
+                    Vector3 c0u = c0 + Vector3.up * 0.60f;
+                    Vector3 c1u = c1 + Vector3.up * 0.60f;
                     roofsAndCornices.AddQuadFacing(c0, c1, c1u, c0u, Vector2.zero, Vector2.right, Vector2.one, Vector2.up, outward);
 
-                    // Striped street-level café/boutique awnings along commercial Av. Gorlero & Calle 20 buildings!
-                    if (style == "midrise_commercial" && edgeLen > 5.5f && i == 0 && (count % 2 == 0))
+                    // Striped street-level cafe/boutique awnings along Av. Gorlero & Calle 20!
+                    if (!isVilla && edgeLen > 5.0f && i == 0 && (count % 2 == 0))
                     {
-                        float awnY = baseY + 4.4f;
+                        float awnY = baseY + 4.3f;
                         var awTarget = (count % 4 == 0) ? awningsBlue : awningsCoral;
-                        Vector3 a0 = new Vector3(p0.x, awnY + 0.5f, p0.y) + outward * 0.1f;
-                        Vector3 a1 = new Vector3(p1.x, awnY + 0.5f, p1.y) + outward * 0.1f;
-                        Vector3 a0o = new Vector3(p0.x, awnY - 0.15f, p0.y) + outward * 1.9f;
-                        Vector3 a1o = new Vector3(p1.x, awnY - 0.15f, p1.y) + outward * 1.9f;
-                        awTarget.AddQuad(a0, a1, a1o, a0o, Vector2.zero, Vector2.right, Vector2.one, Vector2.up);
-                        awTarget.AddQuad(a1, a0, a0o, a1o, Vector2.zero, Vector2.right, Vector2.one, Vector2.up);
+                        Vector3 a0 = new Vector3(p0.x, awnY + 0.55f, p0.y) + outward * 0.15f;
+                        Vector3 a1 = new Vector3(p1.x, awnY + 0.55f, p1.y) + outward * 0.15f;
+                        Vector3 a0o = new Vector3(p0.x, awnY - 0.12f, p0.y) + outward * 2.05f;
+                        Vector3 a1o = new Vector3(p1.x, awnY - 0.12f, p1.y) + outward * 2.05f;
+                        awTarget.AddQuadDoubleSided(a0, a1, a1o, a0o, Vector2.zero, Vector2.right, Vector2.one, Vector2.up);
                     }
                 }
 
-                // Roof cap fan (enforced +Y upward facing normal!)
-                Vector3 roofCenter = new Vector3(cx, topY + 0.55f, cz);
-                for (int i = 0; i < poly.Count; i++)
+                // Pitched hipped terracotta tile roofs on Punta del Este coastal villas vs. flat deck + penthouse on towers!
+                if (isVilla && poly.Count <= 10)
                 {
-                    Vector2 p0 = poly[i];
-                    Vector2 p1 = poly[(i + 1) % poly.Count];
-                    roofsAndCornices.AddTriUp(
-                        roofCenter,
-                        new Vector3(p0.x, topY + 0.55f, p0.y),
-                        new Vector3(p1.x, topY + 0.55f, p1.y));
+                    Vector3 apex = new Vector3(cx, topY + 2.65f, cz);
+                    for (int i = 0; i < poly.Count; i++)
+                    {
+                        Vector2 p0 = poly[i];
+                        Vector2 p1 = poly[(i + 1) % poly.Count];
+                        tileRoofs.AddTriUp(apex, new Vector3(p0.x, topY + 0.35f, p0.y), new Vector3(p1.x, topY + 0.35f, p1.y));
+                    }
                 }
-
-                // Rooftop mechanical penthouse on taller towers for authentic skyline detail!
-                if (height >= 18f)
+                else
                 {
-                    AddBox(roofsAndCornices, new Vector3(cx, topY + 1.85f, cz), new Vector3(5.2f, 2.6f, 4.4f));
+                    Vector3 roofCenter = new Vector3(cx, topY + 0.60f, cz);
+                    for (int i = 0; i < poly.Count; i++)
+                    {
+                        Vector2 p0 = poly[i];
+                        Vector2 p1 = poly[(i + 1) % poly.Count];
+                        roofsAndCornices.AddTriUp(roofCenter, new Vector3(p0.x, topY + 0.60f, p0.y), new Vector3(p1.x, topY + 0.60f, p1.y));
+                    }
+                    if (height >= 17f)
+                        AddBox(roofsAndCornices, new Vector3(cx, topY + 2.0f, cz), new Vector3(5.6f, 2.8f, 4.8f));
                 }
 
                 count++;
             }
 
             var bRoot = new GameObject("City_Architecture");
-            CreateMeshChild(bRoot.transform, "Buildings_GlassTowers", glassWalls.Build("Mesh_BldGlass"), mats["GlassTower"], true);
+            CreateMeshChild(bRoot.transform, "Buildings_LuxuryWhiteTowers", luxuryWhiteWalls.Build("Mesh_BldLuxWhite"), mats["GlassTower"], true);
+            CreateMeshChild(bRoot.transform, "Buildings_BronzeTowers",      bronzeWalls.Build("Mesh_BldBronze"), mats["BronzeTower"], true);
+            CreateMeshChild(bRoot.transform, "Buildings_TerracottaResort",  terracottaWalls.Build("Mesh_BldTerra"), mats["TerracottaRes"], true);
             CreateMeshChild(bRoot.transform, "Buildings_GorleroCommercial", gorleroWalls.Build("Mesh_BldGorlero"), mats["Gorlero"], true);
-            CreateMeshChild(bRoot.transform, "Buildings_CoastalVillas", villaWalls.Build("Mesh_BldVilla"), mats["Villa"], true);
-            CreateMeshChild(bRoot.transform, "Buildings_RoofsAndCornices", roofsAndCornices.Build("Mesh_BldRoofs"), mats["ConcreteRoof"], true);
-            CreateMeshChild(bRoot.transform, "Buildings_AwningsBlue", awningsBlue.Build("Mesh_AwningsBlue"), mats["AwningBlue"], false);
-            CreateMeshChild(bRoot.transform, "Buildings_AwningsCoral", awningsCoral.Build("Mesh_AwningsCoral"), mats["AwningCoral"], false);
+            CreateMeshChild(bRoot.transform, "Buildings_CoastalVillas",     villaWalls.Build("Mesh_BldVilla"), mats["Villa"], true);
+            CreateMeshChild(bRoot.transform, "Buildings_CommercialPlinths", plinthWalls.Build("Mesh_BldPlinths"), mats["DarkPlinth"], true);
+            CreateMeshChild(bRoot.transform, "Buildings_3DBalconies",       balconyLedges.Build("Mesh_BldBalconies"), mats["BalconyLedge"], false);
+            CreateMeshChild(bRoot.transform, "Buildings_RoofsAndCornices",  roofsAndCornices.Build("Mesh_BldRoofs"), mats["ConcreteRoof"], true);
+            CreateMeshChild(bRoot.transform, "Buildings_VillaTileRoofs",    tileRoofs.Build("Mesh_BldTileRoofs"), mats["TerracottaRoof"], false);
+            CreateMeshChild(bRoot.transform, "Buildings_AwningsBlue",       awningsBlue.Build("Mesh_AwningsBlue"), mats["AwningBlue"], false);
+            CreateMeshChild(bRoot.transform, "Buildings_AwningsCoral",      awningsCoral.Build("Mesh_AwningsCoral"), mats["AwningCoral"], false);
 
-            // Place iconic sculpted Blender Luxury Coastal Skyscrapers (Trump/Imperial/Le Parc silhouette!)
-            // framing Parada 1-3 Playa Brava and Playa Mansa!
-            var curvedTower = AssetDatabase.LoadAssetAtPath<GameObject>($"{ModelDir}/Tower_CurvedGlass.fbx");
-            var terraceTower = AssetDatabase.LoadAssetAtPath<GameObject>($"{ModelDir}/Tower_TwinTerrace.fbx");
+            // ICONIC HERO SKYLINE: Enjoy Punta del Este Resort & Casino (Parada 4 Mansa vista!) + Trump & Le Parc sculpted towers!
+            {
+                float ex = 390f, ez = 1015f;
+                float ey = SampleTerrainY(terrain, ex, ez) - 0.5f;
+                var enjoy = SpawnModel("Enjoy_ResortCasino", new Vector3(ex, ey, ez), Quaternion.Euler(0f, -125f, 0f), Vector3.one * 1.15f, bRoot.transform, mats, true);
+                if (enjoy != null)
+                {
+                    foreach (var mr in enjoy.GetComponentsInChildren<MeshRenderer>())
+                    {
+                        if (mr.name.Contains("Enjoy_SignBoard"))
+                            mr.sharedMaterial = mats["Sign_Enjoy"];
+                    }
+                }
+            }
 
+            string[] heroTowerPrefabs = { "Tower_TrumpCylinder", "Tower_LeParcCurved", "Tower_CurvedGlass", "Tower_TwinTerrace" };
             Vector4[] heroTowerSpecs =
             {
-                // (x, z, yaw, scaleY) — Mansa & Brava iconic beachfront skyline corridor!
-                new Vector4( 620f,  730f,  32f, 1.15f),
+                new Vector4( 620f,  730f,  32f, 1.12f),
                 new Vector4( 715f,  790f,  48f, 1.05f),
-                new Vector4( 825f,  845f,  35f, 1.25f),
-                new Vector4( 945f,  910f,  42f, 1.10f),
-                new Vector4( 490f,  690f,  15f, 0.95f),
-                new Vector4( 395f,  845f, -12f, 1.20f), // Rambla Mansa waterfront towers
-                new Vector4( 365f,  960f, -18f, 1.08f),
-                new Vector4( 415f, 1065f, -10f, 1.18f),
-                new Vector4( 535f,  940f,  20f, 1.02f),
+                new Vector4( 825f,  845f,  35f, 1.22f),
+                new Vector4( 945f,  910f,  42f, 1.08f),
+                new Vector4( 490f,  690f,  15f, 0.96f),
+                new Vector4( 395f,  845f, -12f, 1.16f),
+                new Vector4( 535f,  940f,  20f, 1.04f),
                 new Vector4( 680f,  965f,  30f, 1.12f),
-                new Vector4( 510f,  420f,  38f, 0.88f), // Near Parada 1 Brava
-                new Vector4( 425f,  330f,  35f, 0.82f),
+                new Vector4( 510f,  420f,  38f, 0.88f),
+                new Vector4( 425f,  330f,  35f, 0.84f),
             };
 
             for (int i = 0; i < heroTowerSpecs.Length; i++)
             {
                 var sp = heroTowerSpecs[i];
-                var prefab = (i % 2 == 0) ? curvedTower : terraceTower;
-                if (prefab == null) continue;
+                string tName = heroTowerPrefabs[i % heroTowerPrefabs.Length];
                 float y = SampleTerrainY(terrain, sp.x, sp.y) - 0.6f;
-                var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-                inst.name = $"HeroTower_Punta_{i:00}";
-                inst.transform.SetParent(bRoot.transform);
-                inst.transform.position = new Vector3(sp.x, y, sp.y);
-                inst.transform.rotation = Quaternion.Euler(0f, sp.z, 0f);
-                inst.transform.localScale = new Vector3(1.05f, sp.w, 1.05f);
-                UpgradeFbxMaterialsToUrp(inst, mats);
-                AddBoxColliderFromBounds(inst);
+                var inst = SpawnModel(tName, new Vector3(sp.x, y, sp.y), Quaternion.Euler(0f, sp.z, 0f), new Vector3(1.05f, sp.w, 1.05f), bRoot.transform, mats, true);
+                if (inst != null) inst.name = $"HeroTower_{tName}_{i:00}";
             }
         }
 
@@ -900,35 +1075,52 @@ namespace GtaPunta.Editor
                 }
             }
 
-            // 1. LOS DEDOS / LA MANO DE PUNTA DEL ESTE (Playa Brava Parada 1 — exact OSM 794.6, 511.3!)
+            // 1. LOS DEDOS / LA MANO DE PUNTA DEL ESTE v2 (Playa Brava Parada 1 — exact OSM 794.6, 511.3!)
             {
                 float x = 794.6f, z = 511.3f;
                 float y = Mathf.Max(SampleTerrainY(terrain, x, z), 1.6f);
-                var dedos = SpawnModel("LaMano_LosDedos", new Vector3(x, y - 0.05f, z), Quaternion.Euler(0f, 132f, 0f), Vector3.one * 1.35f, lmRoot.transform, mats, true);
+                var dedos = SpawnModel("LaMano_LosDedos_v2", new Vector3(x, y - 0.08f, z), Quaternion.Euler(0f, 132f, 0f), Vector3.one * 1.25f, lmRoot.transform, mats, true);
                 if (dedos != null)
                 {
                     foreach (var r in dedos.GetComponentsInChildren<MeshRenderer>())
                     {
-                        if (r.name.Contains("Sand")) r.sharedMaterial = mats["Sand"];
-                        else r.sharedMaterial = mats["Sculpture"];
+                        if (r.name.Contains("LaMano_")) r.sharedMaterial = mats["Sculpture"];
                     }
                 }
-                // Wooden beach boardwalk (pasarela) from Rambla down onto the sand beside Los Dedos
+                // Timber beach boardwalk (pasarela) with low wooden side rails from Rambla onto the Brava sand!
                 var pasarela = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 pasarela.name = "Pasarela_LosDedos";
                 pasarela.transform.SetParent(lmRoot.transform);
-                pasarela.transform.position = new Vector3(772f, y + 0.12f, 522f);
+                pasarela.transform.position = new Vector3(771f, y + 0.14f, 522f);
                 pasarela.transform.rotation = Quaternion.Euler(0f, 118f, 0f);
-                pasarela.transform.localScale = new Vector3(3.2f, 0.25f, 34f);
+                pasarela.transform.localScale = new Vector3(3.4f, 0.22f, 36f);
                 pasarela.GetComponent<MeshRenderer>().sharedMaterial = mats["WoodDock"];
+
+                // Coastal dune grass tufts (espartillo) framing the natural Playa Brava dunes around Los Dedos
+                var duneRng = new System.Random(511);
+                for (int dg = 0; dg < 26; dg++)
+                {
+                    float ang = (float)duneRng.NextDouble() * Mathf.PI * 2f;
+                    float rad = 11f + (float)duneRng.NextDouble() * 34f;
+                    float gx = x + Mathf.Cos(ang) * rad;
+                    float gz = z + Mathf.Sin(ang) * rad;
+                    float gy = SampleTerrainY(terrain, gx, gz);
+                    if (gy > 1.3f && gy < 4.1f)
+                    {
+                        var tuft = SpawnModel("Prop_DuneGrass", new Vector3(gx, gy - 0.05f, gz),
+                            Quaternion.Euler(0f, (float)duneRng.NextDouble() * 360f, 0f),
+                            Vector3.one * (0.85f + (float)duneRng.NextDouble() * 0.65f), lmRoot.transform, mats, false);
+                        ApplyDuneGrassMaterial(tuft, mats);
+                    }
+                }
 
                 // Beach Parador, Lifeguard Tower & Umbrellas framing Playa Brava right near Los Dedos!
                 SpawnModel("Beach_LifeguardTower", new Vector3(818f, SampleTerrainY(terrain, 818f, 492f), 492f), Quaternion.Euler(0f, 125f, 0f), Vector3.one, lmRoot.transform, mats, true);
                 SpawnModel("Beach_Parador", new Vector3(755f, SampleTerrainY(terrain, 755f, 470f), 470f), Quaternion.Euler(0f, 128f, 0f), Vector3.one, lmRoot.transform, mats, true);
-                for (int u = 0; u < 8; u++)
+                for (int u = 0; u < 10; u++)
                 {
-                    float ux = 768f + u * 11f;
-                    float uz = 482f + u * 7f - (u % 2) * 14f;
+                    float ux = 766f + u * 10.5f;
+                    float uz = 480f + u * 6.8f - (u % 2) * 14f;
                     float uy = SampleTerrainY(terrain, ux, uz);
                     if (uy > 0.7f)
                         SpawnModel("Beach_UmbrellaSet", new Vector3(ux, uy, uz), Quaternion.Euler(0f, 125f + u * 11f, 0f), Vector3.one, lmRoot.transform, mats, false);
@@ -937,16 +1129,35 @@ namespace GtaPunta.Editor
                 roadNet.pedestrianPoints.Add(new Vector3(802f, y + 0.2f, 504f));
             }
 
-            // 2. FARO DE PUNTA DEL ESTE (exact OSM -514.8, -705.6) + Rotating Lighthouse Beam!
+            // 2. FARO DE PUNTA DEL ESTE v2 + PLAZA DEL FARO PARK (exact OSM -514.8, -705.6) + Rotating Lighthouse Beam!
             {
                 float x = -514.8f, z = -705.6f;
                 float y = SampleTerrainY(terrain, x, z);
-                var faro = SpawnModel("Faro_PuntaDelEste", new Vector3(x, y - 0.3f, z), Quaternion.Euler(0f, 20f, 0f), Vector3.one, lmRoot.transform, mats, true);
+                var faro = SpawnModel("Faro_PuntaDelEste_v2", new Vector3(x, y - 0.3f, z), Quaternion.Euler(0f, 20f, 0f), Vector3.one, lmRoot.transform, mats, true);
 
-                // Rotating volumetric beam rig inside the lantern room (41.8m up!)
+                // Lush landscaped Plaza del Faro park lawn + brick promenade paths (eliminates bare terrain!)
+                CreateGroundPad(lmRoot.transform, "PlazaDelFaro_Lawn", new Vector3(-472f, y + 0.08f, -692f), new Vector3(112f, 0.25f, 92f), 14f, mats["Grass"]);
+                CreateGroundPad(lmRoot.transform, "PlazaDelFaro_BrickWalk", new Vector3(-472f, y + 0.14f, -692f), new Vector3(16f, 0.24f, 88f), 14f, mats["BrickPlaza"]);
+                CreateGroundPad(lmRoot.transform, "PlazaDelFaro_CrossWalk", new Vector3(-472f, y + 0.14f, -692f), new Vector3(96f, 0.24f, 14f), 14f, mats["BrickPlaza"]);
+
+                // Poly Haven painted wooden park benches around Plaza del Faro
+                Vector3[] faroBenches =
+                {
+                    new Vector3(-484f, 0f, -680f), new Vector3(-460f, 0f, -682f),
+                    new Vector3(-495f, 0f, -705f), new Vector3(-448f, 0f, -706f),
+                };
+                for (int b = 0; b < faroBenches.Length; b++)
+                {
+                    float by = SampleTerrainY(terrain, faroBenches[b].x, faroBenches[b].z) + 0.12f;
+                    var bench = SpawnModel("PH_painted_wooden_bench", new Vector3(faroBenches[b].x, by, faroBenches[b].z),
+                        Quaternion.Euler(0f, b * 90f + 18f, 0f), Vector3.one * 1.15f, lmRoot.transform, mats, false);
+                    ApplySingleMaterial(bench, mats["PH_Bench"]);
+                }
+
+                // Rotating volumetric beam rig inside the lantern room (40.5m up!)
                 var rotor = new GameObject("Faro_BeaconRotor");
                 rotor.transform.SetParent(lmRoot.transform);
-                rotor.transform.position = new Vector3(x, y + 41.5f, z);
+                rotor.transform.position = new Vector3(x, y + 40.5f, z);
 
                 var spotGo = new GameObject("Faro_Spotlight");
                 spotGo.transform.SetParent(rotor.transform, false);
@@ -954,20 +1165,20 @@ namespace GtaPunta.Editor
                 var spot = spotGo.AddComponent<Light>();
                 spot.type = LightType.Spot;
                 spot.color = Palette.SunAfternoon;
-                spot.intensity = 1600f;
+                spot.intensity = 1500f;
                 spot.range = 320f;
                 spot.spotAngle = 24f;
 
-                // Translucent volumetric beam cone softly flaring from the lantern at night!
+                // Soft atmospheric translucent volumetric beam cone at night
                 var cone = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 cone.name = "Faro_VolumetricBeam";
                 UnityEngine.Object.DestroyImmediate(cone.GetComponent<Collider>());
                 cone.transform.SetParent(rotor.transform, false);
-                cone.transform.localPosition = new Vector3(0f, -4f, 52f);
+                cone.transform.localPosition = new Vector3(0f, -4f, 54f);
                 cone.transform.localRotation = Quaternion.Euler(95f, 0f, 0f);
-                cone.transform.localScale = new Vector3(4.2f, 52f, 4.2f);
+                cone.transform.localScale = new Vector3(3.8f, 54f, 3.8f);
                 var beamMat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-                beamMat.color = new Color(1.0f, 0.94f, 0.72f, 0.085f);
+                beamMat.color = new Color(1.0f, 0.94f, 0.72f, 0.048f);
                 beamMat.SetFloat("_Surface", 1f);
                 beamMat.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
                 beamMat.SetInt("_DstBlend", (int)BlendMode.One);
@@ -983,145 +1194,235 @@ namespace GtaPunta.Editor
                 extras.faroBeamCone = cmr;
             }
 
-            // 3. IGLESIA DE LA CANDELARIA (exact OSM -412.9, -714.6)
+            // 3. IGLESIA DE LA CANDELARIA v2 (exact OSM -412.9, -714.6)
             {
                 float x = -412.9f, z = -714.6f;
                 float y = SampleTerrainY(terrain, x, z);
-                SpawnModel("Iglesia_Candelaria", new Vector3(x, y - 0.25f, z), Quaternion.Euler(0f, -42f, 0f), Vector3.one, lmRoot.transform, mats, true);
+                SpawnModel("Iglesia_Candelaria_v2", new Vector3(x, y - 0.20f, z), Quaternion.Euler(0f, -42f, 0f), Vector3.one, lmRoot.transform, mats, true);
             }
 
-            // 4. PUERTO DE PUNTA DEL ESTE (Real OSM piers/escollera + Yacht Club + 26 Boats + Sea Lions!)
+            // 4. PUERTO DE PUNTA DEL ESTE v2 (Clean Concrete Quay + Photogrammetry Granite Breakwater + 4 Non-Overlapping Marinas + Fish Stalls + 32 Vessels + Seagulls!)
             {
                 var puertoRoot = new GameObject("Landmark_PuertoPuntaDelEste");
                 puertoRoot.transform.SetParent(lmRoot.transform);
 
-                // Yacht Club Punta del Este at exact OSM (-403.6, -236.5)
+                // Yacht Club Punta del Este at exact OSM (-403.6, -236.5) + Illuminated Sign
                 float ycY = SampleTerrainY(terrain, -403.6f, -236.5f);
                 SpawnModel("Puerto_YachtClub", new Vector3(-403.6f, ycY - 0.2f, -236.5f), Quaternion.Euler(0f, -55f, 0f), Vector3.one, puertoRoot.transform, mats, true);
+                CreateIlluminatedSignBoard(puertoRoot.transform, "SignBoard_YachtClub", new Vector3(-400f, ycY + 9.2f, -230f), -55f, new Vector2(8.5f, 2.4f), mats["Sign_YachtClub"]);
 
-                // Extrude real OSM pier & breakwater lines into solid walkable docks (+2.1m above sea level!)
-                var pierMesh = new MeshBuilder();
-                var piersList = mapRaw["piers"] as List<object>;
-                if (piersList != null)
+                // Clean Poured-Concrete Waterfront Quay Promenade & Main Seaward Escollera Breakwater (100% clear of Rambla road!)
+                var quayMesh = new MeshBuilder();
+                Vector3[][] concreteQuays =
                 {
-                    foreach (var po in piersList)
-                    {
-                        var pd = po as Dictionary<string, object>;
-                        var ppts = pd["points"] as List<object>;
-                        if (ppts == null || ppts.Count < 2) continue;
-
-                        for (int i = 0; i < ppts.Count - 1; i++)
-                        {
-                            var a2 = ppts[i] as List<object>;
-                            var b2 = ppts[i + 1] as List<object>;
-                            Vector3 a = new Vector3(Convert.ToSingle(a2[0]), 2.15f, Convert.ToSingle(a2[1]));
-                            Vector3 b = new Vector3(Convert.ToSingle(b2[0]), 2.15f, Convert.ToSingle(b2[1]));
-                            if (Vector3.Distance(a, b) < 1.5f) continue;
-
-                            Vector3 dir = (b - a).normalized;
-                            Vector3 right = new Vector3(dir.z, 0f, -dir.x);
-                            float halfW = 4.2f;
-                            AddRibbonBox(pierMesh, a, b, right * halfW, 3.8f);
-                        }
-                    }
+                    new[] { new Vector3(-488f, 2.25f, -156f), new Vector3(-286f, 2.25f, -142f) }, // Seaward waterfront quay promenade (clear of Rambla!)
+                    new[] { new Vector3(-488f, 2.40f, -158f), new Vector3(-538f, 2.40f,  175f) }, // Iconic seaward Escollera Breakwater!
+                };
+                foreach (var cq in concreteQuays)
+                {
+                    Vector3 dir = (cq[1] - cq[0]).normalized;
+                    Vector3 right = new Vector3(dir.z, 0f, -dir.x);
+                    AddRibbonBox(quayMesh, cq[0], cq[1], right * 6.5f, 4.4f);
                 }
+                CreateMeshChild(puertoRoot.transform, "Puerto_ConcreteQuayAndEscollera", quayMesh.Build("Mesh_PuertoQuay"), mats["ConcreteQuay"], true);
 
-                // Also add clean iconic finger piers extending NW into the sheltered harbor bay!
+                // 4 Neat Non-Overlapping Floating Oak-Deck Marina Finger Piers extending NW into the calm harbor!
+                var marinaMesh = new MeshBuilder();
                 Vector3[][] fingerPiers =
                 {
-                    new[] { new Vector3(-430f, 2.0f, -155f), new Vector3(-475f, 2.0f, -25f) },
-                    new[] { new Vector3(-378f, 2.0f, -158f), new Vector3(-418f, 2.0f, -38f) },
-                    new[] { new Vector3(-326f, 2.0f, -162f), new Vector3(-360f, 2.0f, -55f) },
-                    new[] { new Vector3(-495f, 2.4f, -180f), new Vector3(-548f, 2.4f, 185f) }, // Main Escollera Breakwater!
+                    new[] { new Vector3(-460f, 1.85f, -152f), new Vector3(-488f, 1.85f, -20f) },
+                    new[] { new Vector3(-415f, 1.85f, -150f), new Vector3(-442f, 1.85f, -26f) },
+                    new[] { new Vector3(-370f, 1.85f, -147f), new Vector3(-395f, 1.85f, -34f) },
+                    new[] { new Vector3(-324f, 1.85f, -144f), new Vector3(-348f, 1.85f, -44f) },
                 };
                 foreach (var fp in fingerPiers)
                 {
                     Vector3 dir = (fp[1] - fp[0]).normalized;
                     Vector3 right = new Vector3(dir.z, 0f, -dir.x);
-                    AddRibbonBox(pierMesh, fp[0], fp[1], right * 3.8f, 3.8f);
-                    roadNet.pedestrianPoints.Add(Vector3.Lerp(fp[0], fp[1], 0.45f) + Vector3.up * 0.2f);
+                    AddRibbonBox(marinaMesh, fp[0], fp[1], right * 2.5f, 2.6f);
+                    roadNet.pedestrianPoints.Add(Vector3.Lerp(fp[0], fp[1], 0.38f) + Vector3.up * 0.25f);
+                    // Mooring bollards neatly lining each marina finger pier!
+                    for (int k = 1; k <= 5; k++)
+                    {
+                        Vector3 bp = Vector3.Lerp(fp[0], fp[1], k / 6f) + right * 2.0f;
+                        SpawnModel("Puerto_Bollard", bp, Quaternion.identity, Vector3.one, puertoRoot.transform, mats, false);
+                    }
                 }
-                CreateMeshChild(puertoRoot.transform, "Puerto_PiersAndEscollera", pierMesh.Build("Mesh_PuertoPiers"), mats["WoodDock"], true);
+                CreateMeshChild(puertoRoot.transform, "Puerto_FloatingMarinas", marinaMesh.Build("Mesh_PuertoMarinas"), mats["WoodDock"], true);
 
-                // Moored Luxury Yachts, Sailboats & Artisanal Fishing Boats gently bobbing in the harbor & Playa Mansa bay!
-                string[] boatModels = { "Boat_LuxuryYacht", "Boat_Sailboat", "Boat_FishingBoat" };
+                // Poly Haven Photogrammetry Granite Rocks armoring the outer seaward edge of the Escollera breakwater!
+                string[] phRockModels = { "PH_coast_land_rocks_02", "PH_coast_land_rocks_03", "PH_coast_land_rocks_04", "PH_boulder_01" };
+                string[] phRockMats   = { "PH_Rock02", "PH_Rock03", "PH_Rock04", "PH_Boulder" };
+                var rockRng = new System.Random(1889);
+                for (int r = 0; r < 24; r++)
+                {
+                    float t = r / 23f;
+                    Vector3 pt = Vector3.Lerp(new Vector3(-498f, 0.2f, -176f), new Vector3(-550f, 0.2f, 182f), t);
+                    pt.x -= 4.5f + (float)rockRng.NextDouble() * 6.5f;
+                    int idx = r % phRockModels.Length;
+                    float sc = idx == 3 ? (2.2f + (float)rockRng.NextDouble() * 1.4f) : (1.15f + (float)rockRng.NextDouble() * 0.75f);
+                    var rock = SpawnModel(phRockModels[idx], pt, Quaternion.Euler(0f, (float)rockRng.NextDouble() * 360f, 0f), Vector3.one * sc, puertoRoot.transform, mats, false);
+                    ApplySingleMaterial(rock, mats[phRockMats[idx]]);
+                }
+
+                // Iconic Blue & White Artisanal Fish Market Stalls (Puestos de Pesca del Puerto) neatly on the seaward concrete quay (zero road overlap!)
+                for (int fs = 0; fs < 6; fs++)
+                {
+                    Vector3 fpos = Vector3.Lerp(new Vector3(-478f, 2.25f, -157f), new Vector3(-418f, 2.25f, -153f), fs / 5f);
+                    SpawnModel("Puerto_FishStall", fpos, Quaternion.Euler(0f, -6f, 0f), Vector3.one * 1.05f, puertoRoot.transform, mats, true);
+                }
+                CreateIlluminatedSignBoard(puertoRoot.transform, "SignBoard_ParrillaPuerto", new Vector3(-448f, 6.2f, -160f), -6f, new Vector2(7.6f, 2.2f), mats["Sign_ParrillaPuerto"]);
+
+                // 32 Detailed Vessels moored tightly right beside the 4 marina walkways & anchored across calm Playa Mansa bay!
+                string[] boatModels = { "Boat_SuperYacht_v2", "Boat_Catamaran", "Boat_Sailboat", "Boat_FishingBoat" };
                 Vector3[] boatSpots =
                 {
-                    // Inside Puerto slips
-                    new Vector3(-455f, 0.0f, -95f),  new Vector3(-442f, 0.0f, -62f),  new Vector3(-430f, 0.0f, -32f),
-                    new Vector3(-396f, 0.0f, -108f), new Vector3(-384f, 0.0f, -72f),  new Vector3(-372f, 0.0f, -40f),
-                    new Vector3(-344f, 0.0f, -112f), new Vector3(-332f, 0.0f, -78f),  new Vector3(-496f, 0.0f, -55f),
-                    new Vector3(-508f, 0.0f,  15f),  new Vector3(-492f, 0.0f,  68f),  new Vector3(-478f, 0.0f, 120f),
-                    // Anchored out across calm Playa Mansa bay facing Isla Gorriti!
-                    new Vector3(-620f, 0.0f,  95f),  new Vector3(-590f, 0.0f, 240f),  new Vector3(-460f, 0.0f, 345f),
-                    new Vector3(-340f, 0.0f, 430f),  new Vector3(-240f, 0.0f, 540f),  new Vector3(-165f, 0.0f, 680f),
-                    new Vector3(-710f, 0.0f, -85f),  new Vector3(-745f, 0.0f, 260f),  new Vector3(-540f, 0.0f, 520f),
-                    new Vector3(-390f, 0.0f, 760f),  new Vector3(-210f, 0.0f, 890f),  new Vector3(-660f, 0.0f, 410f),
+                    // Slip row 1 (right alongside Promenade & Pier 1 — hero foreground yachts cleanly clear of quay!)
+                    new Vector3(-474f, 0.0f, -132f), new Vector3(-478f, 0.0f, -104f), new Vector3(-482f, 0.0f, -76f), new Vector3(-486f, 0.0f, -48f),
+                    new Vector3(-446f, 0.0f, -130f), new Vector3(-451f, 0.0f, -102f), new Vector3(-456f, 0.0f, -74f), new Vector3(-460f, 0.0f, -46f),
+                    // Slip row 2 (between Pier 2 & Pier 3)
+                    new Vector3(-400f, 0.0f, -130f), new Vector3(-405f, 0.0f, -100f), new Vector3(-410f, 0.0f, -72f), new Vector3(-416f, 0.0f, -44f),
+                    new Vector3(-355f, 0.0f, -128f), new Vector3(-360f, 0.0f, -98f),  new Vector3(-366f, 0.0f, -68f), new Vector3(-372f, 0.0f, -40f),
+                    // Escollera inner anchorage (dramatic superyachts & catamarans!)
+                    new Vector3(-512f, 0.0f, -65f),  new Vector3(-516f, 0.0f, -12f),  new Vector3(-520f, 0.0f,  42f), new Vector3(-522f, 0.0f, 102f),
+                    // Anchored across tranquil Playa Mansa bay framing Isla Gorriti & Enjoy Mansa!
+                    new Vector3(-620f, 0.0f,  95f),  new Vector3(-590f, 0.0f, 240f),  new Vector3(-460f, 0.0f, 345f), new Vector3(-340f, 0.0f, 430f),
+                    new Vector3(-240f, 0.0f, 540f),  new Vector3(-165f, 0.0f, 680f),  new Vector3(-710f, 0.0f, -85f), new Vector3(-745f, 0.0f, 260f),
+                    new Vector3(-540f, 0.0f, 520f),  new Vector3(-390f, 0.0f, 760f),  new Vector3(-210f, 0.0f, 890f), new Vector3(-660f, 0.0f, 410f),
                 };
 
                 for (int i = 0; i < boatSpots.Length; i++)
                 {
                     string bModel = boatModels[i % boatModels.Length];
-                    float yaw = (i < 12) ? -68f + (i % 3) * 6f : (i * 47f) % 360f;
-                    var boat = SpawnModel(bModel, boatSpots[i], Quaternion.Euler(0f, yaw, 0f), Vector3.one * 1.15f, puertoRoot.transform, mats, false);
+                    float yaw = (i < 20) ? -72f + (i % 3) * 5f : (i * 47f) % 360f;
+                    var boat = SpawnModel(bModel, boatSpots[i], Quaternion.Euler(0f, yaw, 0f), Vector3.one * 1.12f, puertoRoot.transform, mats, false);
                     if (boat != null)
                     {
                         var bob = boat.AddComponent<FloatingBoatBob>();
-                        bob.bobAmplitude = (i < 12) ? 0.09f : 0.16f;
-                        bob.phaseOffset = i * 0.9f;
+                        bob.bobAmplitude = (i < 20) ? 0.08f : 0.15f;
+                        bob.phaseOffset = i * 0.85f;
                     }
                 }
 
-                // Lounging Sea Lions (Lobos Marinos) on the wooden Puerto piers!
+                // Lounging Sea Lions (Lobos Marinos) resting right beside the Puerto fish stalls & marinas!
                 Vector3[] sealionSpots =
                 {
-                    new Vector3(-448f, 2.2f, -104f),
-                    new Vector3(-452f, 2.2f, -94f),
-                    new Vector3(-395f, 2.2f, -110f),
-                    new Vector3(-518f, 2.5f, -45f),
+                    new Vector3(-466f, 2.18f, -166f),
+                    new Vector3(-456f, 2.18f, -164f),
+                    new Vector3(-420f, 1.88f, -155f),
+                    new Vector3(-506f, 2.38f, -35f),
                 };
                 for (int i = 0; i < sealionSpots.Length; i++)
-                    SpawnModel("SeaLion_Puerto", sealionSpots[i], Quaternion.Euler(0f, i * 85f, 0f), Vector3.one * 1.1f, puertoRoot.transform, mats, false);
+                    SpawnModel("SeaLion_Puerto", sealionSpots[i], Quaternion.Euler(0f, i * 85f, 0f), Vector3.one * 1.15f, puertoRoot.transform, mats, false);
+
+                // Soaring Flocks of Coastal Seagulls circling above Puerto de Punta del Este & Playa Brava!
+                Vector3[] gullCenters = { new Vector3(-435f, 26f, -95f), new Vector3(790f, 24f, 515f) };
+                for (int g = 0; g < 12; g++)
+                {
+                    Vector3 c = gullCenters[g < 7 ? 0 : 1];
+                    var gull = SpawnModel("Seagull_Bird", c + new Vector3(0f, (g % 4) * 3.2f, 0f), Quaternion.identity, Vector3.one * 1.35f, puertoRoot.transform, mats, false);
+                    if (gull != null)
+                    {
+                        var flock = gull.AddComponent<CoastalSeagullFlock>();
+                        flock.orbitRadius = 26f + (g % 5) * 9f;
+                        flock.orbitSpeed = 0.22f + (g % 3) * 0.06f;
+                        flock.phaseOffset = g * 1.15f;
+                    }
+                }
             }
 
-            // 5. PLAZA ARTIGAS (Feria de Artesanos on Av. Gorlero — exact OSM 207.6, -77.8)
+            // 5. PLAZA ARTIGAS & AV. GORLERO LIVING COMMERCIAL STRIP (exact OSM 207.6, -77.8)
             {
                 var plazaRoot = new GameObject("Landmark_PlazaArtigas");
                 plazaRoot.transform.SetParent(lmRoot.transform);
                 float px = 207.6f, pz = -77.8f;
+                float py = SampleTerrainY(terrain, px, pz);
+
+                // Lush Brick Plaza & Garden Lawn Base Pad (flush with sidewalks & zero bare sand inside Plaza Artigas!)
+                CreateGroundPad(plazaRoot.transform, "PlazaArtigas_BrickBase", new Vector3(px, py + 0.04f, pz), new Vector3(62f, 0.12f, 62f), 45f, mats["BrickPlaza"]);
+                CreateGroundPad(plazaRoot.transform, "PlazaArtigas_LawnRing",  new Vector3(px, py + 0.07f, pz), new Vector3(36f, 0.12f, 36f), 45f, mats["Grass"]);
+
+                // Stone Monument Fountain centerpiece!
+                SpawnModel("Plaza_Fountain", new Vector3(px, py + 0.22f, pz), Quaternion.identity, Vector3.one * 1.1f, plazaRoot.transform, mats, true);
+
+                // 12 Artisan Market Stalls framing the square
                 for (int row = -1; row <= 1; row++)
                 {
                     for (int col = -1; col <= 1; col++)
                     {
                         if (row == 0 && col == 0) continue;
-                        float sx = px + col * 11f;
-                        float sz = pz + row * 11f;
-                        float sy = SampleTerrainY(terrain, sx, sz);
+                        float sx = px + col * 14f;
+                        float sz = pz + row * 14f;
+                        float sy = SampleTerrainY(terrain, sx, sz) + 0.18f;
                         SpawnModel("PlazaArtigas_Stall", new Vector3(sx, sy, sz), Quaternion.Euler(0f, 45f, 0f), Vector3.one, plazaRoot.transform, mats, true);
                     }
                 }
-                roadNet.pedestrianPoints.Add(new Vector3(px, SampleTerrainY(terrain, px, pz) + 0.2f, pz));
+
+                // Poly Haven Modular Street Seating + Gorlero Sidewalk Cafe Tables & Parasols + Bus Stop!
+                var modSeat = SpawnModel("PH_modular_street_seating", new Vector3(px + 18f, py + 0.22f, pz + 4f), Quaternion.Euler(0f, 45f, 0f), Vector3.one * 1.15f, plazaRoot.transform, mats, false);
+                SpawnModel("PH_modular_street_seating", new Vector3(px - 18f, py + 0.22f, pz - 4f), Quaternion.Euler(0f, 225f, 0f), Vector3.one * 1.15f, plazaRoot.transform, mats, false);
+
+                Vector3[] cafeSpots =
+                {
+                    new Vector3(230f, 0f, -52f), new Vector3(238f, 0f, -42f), new Vector3(246f, 0f, -34f),
+                    new Vector3(178f, 0f, -104f), new Vector3(168f, 0f, -114f), new Vector3(284f, 0f, 14f),
+                    new Vector3(312f, 0f, 42f), new Vector3(340f, 0f, 70f),
+                };
+                for (int cf = 0; cf < cafeSpots.Length; cf++)
+                {
+                    float cy = SampleTerrainY(terrain, cafeSpots[cf].x, cafeSpots[cf].z) + 0.18f;
+                    SpawnModel("Gorlero_CafeSet", new Vector3(cafeSpots[cf].x, cy, cafeSpots[cf].z), Quaternion.Euler(0f, 45f + cf * 15f, 0f), Vector3.one, plazaRoot.transform, mats, false);
+                }
+
+                // Uruguayan Bus Stops along Av. Gorlero & Rambla Brava
+                SpawnModel("Gorlero_BusStop", new Vector3(256f, SampleTerrainY(terrain, 256f, -22f) + 0.18f, -22f), Quaternion.Euler(0f, -45f, 0f), Vector3.one, plazaRoot.transform, mats, true);
+                SpawnModel("Gorlero_BusStop", new Vector3(715f, SampleTerrainY(terrain, 715f, 545f) + 0.18f, 545f), Quaternion.Euler(0f, 38f, 0f), Vector3.one, plazaRoot.transform, mats, true);
+
+                // Iconic Illuminated Punta del Este Business Storefront Signs along Av. Gorlero & Calle 20!
+                var shopSigns = new (string matKey, float x, float z, float yaw)[]
+                {
+                    ("Sign_ChurrosManolo", 224f,  -40f,  135f),
+                    ("Sign_CafeGorlero",   248f,  -20f,  -45f),
+                    ("Sign_Heladeria",     192f,  -95f,  135f),
+                    ("Sign_CasinoNogaro",  325f,   58f,  -45f),
+                    ("Sign_Boutique20",    265f,  -88f,  -45f),
+                };
+                foreach (var ss in shopSigns)
+                {
+                    float sy = SampleTerrainY(terrain, ss.x, ss.z) + 5.2f;
+                    CreateIlluminatedSignBoard(plazaRoot.transform, "Shop_" + ss.matKey, new Vector3(ss.x, sy, ss.z), ss.yaw, new Vector2(6.4f, 1.95f), mats[ss.matKey]);
+                }
+
+                roadNet.pedestrianPoints.Add(new Vector3(px, py + 0.25f, pz));
             }
 
-            // 6. PUNTA DE LAS SALINAS ROCKY SOUTHERN TIP (Coastal Granite Boulders meeting the ocean!)
+            // 6. PUNTA DE LAS SALINAS ROCKY SOUTHERN TIP (La Glorieta Gazebo + 36 Poly Haven Photogrammetry Granite Rocks!)
             {
                 var rockRoot = new GameObject("Landmark_PuntaSalinasRocks");
                 rockRoot.transform.SetParent(lmRoot.transform);
+
+                // Iconic Punta de las Salinas viewing gazebo (La Glorieta) right on the open rocky southern headland overlooking the ocean!
+                float gx = -512f, gz = -1046f;
+                float gy = Mathf.Max(SampleTerrainY(terrain, gx, gz), 2.1f);
+                SpawnModel("PuntaSalinas_Glorieta", new Vector3(gx, gy - 0.12f, gz), Quaternion.Euler(0f, 18f, 0f), Vector3.one * 1.15f, rockRoot.transform, mats, true);
+
+                string[] phRockModels = { "PH_coast_land_rocks_02", "PH_coast_land_rocks_03", "PH_coast_land_rocks_04", "PH_boulder_01" };
+                string[] phRockMats   = { "PH_Rock02", "PH_Rock03", "PH_Rock04", "PH_Boulder" };
                 var rng = new System.Random(777);
-                for (int i = 0; i < 38; i++)
+                for (int i = 0; i < 36; i++)
                 {
-                    float ang = Mathf.Lerp(-165f, 15f, i / 37f) * Mathf.Deg2Rad;
-                    float rad = 95f + (float)rng.NextDouble() * 55f;
+                    float ang = Mathf.Lerp(-168f, 18f, i / 35f) * Mathf.Deg2Rad;
+                    float rad = 82f + (float)rng.NextDouble() * 62f;
                     float rx = -505f + Mathf.Cos(ang) * rad;
-                    float rz = -940f + Mathf.Sin(ang) * rad * 0.75f;
+                    float rz = -940f + Mathf.Sin(ang) * rad * 0.78f;
                     float ry = SampleTerrainY(terrain, rx, rz);
-                    if (ry > -2.4f && ry < 3.6f)
+                    if (ry > -2.2f && ry < 3.8f)
                     {
-                        float sc = 0.85f + (float)rng.NextDouble() * 1.45f;
-                        var rock = SpawnModel("Prop_CoastalBoulder", new Vector3(rx, ry - 0.35f, rz),
+                        int idx = i % phRockModels.Length;
+                        float sc = idx == 3 ? (2.2f + (float)rng.NextDouble() * 1.8f) : (1.25f + (float)rng.NextDouble() * 0.95f);
+                        var rock = SpawnModel(phRockModels[idx], new Vector3(rx, ry - 0.35f, rz),
                             Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f), Vector3.one * sc, rockRoot.transform, mats, true);
-                        if (rock != null)
-                            foreach (var mr in rock.GetComponentsInChildren<MeshRenderer>()) mr.sharedMaterial = mats["RockCoastal"];
+                        ApplySingleMaterial(rock, mats[phRockMats[idx]]);
                     }
                 }
             }
@@ -1150,15 +1451,16 @@ namespace GtaPunta.Editor
                 Vector3 right = new Vector3(dir.z, 0f, -dir.x);
                 float yaw = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
 
-                // Palm trees lining the Rambla & Av. Gorlero every ~2-3 nodes
-                if (i % 2 == 0 && palmCount < 230)
+                // Palm trees lining the Rambla & Av. Gorlero every ~2-3 nodes (lush 24-frond Phoenix A/B/C!)
+                if (i % 2 == 0 && palmCount < 245)
                 {
                     float side = (i % 4 == 0) ? 1f : -1f;
-                    Vector3 pPos = node.position + right * (side * 8.4f);
+                    Vector3 pPos = node.position + right * (side * 8.6f);
                     pPos.y = SampleTerrainY(terrain, pPos.x, pPos.z) - 0.15f;
                     if (pPos.y > 1.2f)
                     {
-                        string pm = (palmCount % 2 == 0) ? "Palm_Phoenix_A" : "Palm_Phoenix_B";
+                        int pMod = palmCount % 3;
+                        string pm = pMod == 0 ? "Palm_Phoenix_A" : (pMod == 1 ? "Palm_Phoenix_B" : "Palm_Phoenix_C");
                         float sc = 0.85f + (float)rng.NextDouble() * 0.35f;
                         var palm = SpawnModel(pm, pPos, Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f), Vector3.one * sc, propsRoot.transform, mats, false);
                         ApplyPalmMaterials(palm, mats);
@@ -1167,14 +1469,13 @@ namespace GtaPunta.Editor
                 }
 
                 // Rambla Streetlamps every 4th avenue/rambla node
-                if (i % 4 == 1 && lampCount < 85)
+                if (i % 4 == 1 && lampCount < 90)
                 {
                     Vector3 lPos = node.position + right * 7.4f;
                     lPos.y = SampleTerrainY(terrain, lPos.x, lPos.z);
                     if (lPos.y > 1.8f)
                     {
                         var lamp = SpawnModel("Prop_RamblaLamp", lPos, Quaternion.Euler(0f, yaw - 90f, 0f), Vector3.one, propsRoot.transform, mats, false);
-                        // Add real-time point light on every 3rd lamp (warm golden coastal night glow while keeping RTX 3050 fast!)
                         if (lamp != null && lampCount % 3 == 0 && streetLights.Count < 28)
                         {
                             var plGo = new GameObject("LampLight");
@@ -1193,47 +1494,54 @@ namespace GtaPunta.Editor
                     }
                 }
 
-                // Coastal Benches on Rambla promenade
-                if (node.isRambla && i % 6 == 2 && benchCount < 38)
+                // Coastal Poly Haven Painted Wooden Benches on Rambla promenade
+                if (node.isRambla && i % 6 == 2 && benchCount < 42)
                 {
                     Vector3 bPos = node.position - right * 8.2f;
                     bPos.y = SampleTerrainY(terrain, bPos.x, bPos.z);
                     if (bPos.y > 2.2f)
                     {
-                        SpawnModel("Prop_Bench", bPos, Quaternion.Euler(0f, yaw + 90f, 0f), Vector3.one, propsRoot.transform, mats, false);
+                        var bench = SpawnModel("PH_painted_wooden_bench", bPos, Quaternion.Euler(0f, yaw + 90f, 0f), Vector3.one * 1.15f, propsRoot.transform, mats, false);
+                        ApplySingleMaterial(bench, mats["PH_Bench"]);
                         benchCount++;
                     }
                 }
 
-                // Traffic Lights at major intersections (3+ neighbors)
+                // Functional Cycling Traffic Lights (Green/Yellow/Red!) at major intersections (3+ neighbors)
                 if (node.neighbors.Count >= 3 && i % 5 == 0 && tlCount < 16)
                 {
-                    Vector3 tlPos = node.position + right * 7.2f;
+                    Vector3 tlPos = node.position + right * 7.4f;
                     tlPos.y = SampleTerrainY(terrain, tlPos.x, tlPos.z);
-                    SpawnModel("Prop_TrafficLight", tlPos, Quaternion.Euler(0f, yaw - 90f, 0f), Vector3.one, propsRoot.transform, mats, false);
+                    var tlObj = SpawnModel("Prop_TrafficLight", tlPos, Quaternion.Euler(0f, yaw - 90f, 0f), Vector3.one, propsRoot.transform, mats, false);
+                    AttachWorkingTrafficLight(tlObj, tlCount * 4.5f);
                     tlCount++;
                 }
             }
 
-            // Coastal Maritime Pines around Plaza del Faro, Plaza Artigas & Playa Mansa dunes
+            // Realistic Branching Maritime Pines (Pine_Maritime_A/B — replaces cartoony 3-sphere pines!) around Plaza del Faro, Plaza Artigas & Playa Mansa dunes
             Vector3[] pineCenters =
             {
-                new Vector3(-514.8f, 0f, -705.6f), // Plaza del Faro
+                new Vector3(-472.0f, 0f, -692.0f), // Plaza del Faro (ring framing Faro & Candelaria without blocking views!)
                 new Vector3( 207.6f, 0f,  -77.8f), // Plaza Artigas
                 new Vector3( 260.0f, 0f,  720.0f), // Playa Mansa dunes
                 new Vector3( 310.0f, 0f,  920.0f), // Mansa Parada 2
             };
-            foreach (var c in pineCenters)
+            for (int pc = 0; pc < pineCenters.Length; pc++)
             {
+                var c = pineCenters[pc];
                 for (int k = 0; k < 12; k++)
                 {
                     float ang = k * 30f * Mathf.Deg2Rad;
-                    float rad = 18f + (k % 3) * 14f;
+                    float rad = (pc == 0 ? 34f : 22f) + (k % 3) * 14f;
                     float px = c.x + Mathf.Cos(ang) * rad;
                     float pz = c.z + Mathf.Sin(ang) * rad;
                     float py = SampleTerrainY(terrain, px, pz);
                     if (py > 2.0f)
-                        SpawnModel("Pine_Coastal", new Vector3(px, py - 0.1f, pz), Quaternion.Euler(0f, k * 47f, 0f), Vector3.one * (0.9f + (k % 3) * 0.2f), propsRoot.transform, mats, false);
+                    {
+                        string pineFbx = (k % 2 == 0) ? "Pine_Maritime_A" : "Pine_Maritime_B";
+                        var pine = SpawnModel(pineFbx, new Vector3(px, py - 0.1f, pz), Quaternion.Euler(0f, k * 47f, 0f), Vector3.one * (0.92f + (k % 3) * 0.18f), propsRoot.transform, mats, false);
+                        ApplyPineMaterials(pine, mats);
+                    }
                 }
             }
 
@@ -1315,11 +1623,12 @@ namespace GtaPunta.Editor
 
             var specs = new (string key, string fbx, string display, VehicleArchetype arch, float torque, float maxKmh, bool police)[]
             {
-                ("Cabrio",        "Car_Cabrio_Punta",     "Punta Cabrio GT",       VehicleArchetype.Cabrio,        2500f, 152f, false),
-                ("SportsGT",      "Car_SportsGT",         "Atlántico V8 GT",       VehicleArchetype.SportsGT,      3050f, 178f, false),
-                ("BeachSUV",      "Car_BeachSUV",         "Mansa 4x4 SUV",         VehicleArchetype.BeachSUV,      2700f, 134f, false),
-                ("CitySedan",     "Car_CitySedan",        "Gorlero Sedán",         VehicleArchetype.CitySedan,     2150f, 128f, false),
-                ("PoliceCruiser", "Car_PoliciaMaldonado", "Patrullero Maldonado",  VehicleArchetype.PoliceCruiser, 2950f, 165f, true),
+                ("Cabrio",        "Car_Cabrio_Punta",     "Punta Spyder Cabrio",   VehicleArchetype.Cabrio,        2550f, 156f, false),
+                ("SportsGT",      "Car_SportsGT",         "Atlántico V8 GT",       VehicleArchetype.SportsGT,      3100f, 182f, false),
+                ("BeachSUV",      "Car_BeachSUV",         "Mansa 4x4 SUV",         VehicleArchetype.BeachSUV,      2750f, 136f, false),
+                ("CitySedan",     "Car_CitySedan",        "Gorlero Sedán",         VehicleArchetype.CitySedan,     2200f, 130f, false),
+                ("Taxi",          "Car_TaxiPunta",        "Taxi Punta del Este",   VehicleArchetype.Taxi,          2250f, 132f, false),
+                ("PoliceCruiser", "Car_PoliciaMaldonado", "Patrullero Maldonado",  VehicleArchetype.PoliceCruiser, 3000f, 168f, true),
             };
 
             foreach (var sp in specs)
@@ -1330,12 +1639,14 @@ namespace GtaPunta.Editor
                 dict[sp.key] = tpl;
             }
 
-            // Spawn 10 parked, ready-to-drive vehicles right at iconic Punta del Este spots!
+            // Spawn 12 parked, ready-to-drive sculpted v2 vehicles right at iconic Punta del Este spots!
             var parkedSpots = new (string key, float x, float z, float yaw)[]
             {
                 ("Cabrio",        732f,  526f, 222f), // Right next to Player Spawn at Parada 1 / Los Dedos!
                 ("SportsGT",      226f,  -46f, 224f), // Av. Gorlero & Plaza Artigas
+                ("Taxi",          244f,  -30f, 224f), // Iconic Punta Taxi outside Cafe Gorlero!
                 ("BeachSUV",     -386f, -206f, -45f), // Puerto de Punta del Este
+                ("Taxi",         -412f, -192f, -85f), // Taxi waiting at Puerto de Punta del Este!
                 ("PoliceCruiser",-485f, -688f,  15f), // Plaza del Faro
                 ("Cabrio",       -465f, -908f,  75f), // Punta de las Salinas viewpoint
                 ("SportsGT",      222f,  582f,  18f), // Playa Mansa Rambla
@@ -1424,9 +1735,20 @@ namespace GtaPunta.Editor
                 ctrl.sirenBlueLight = CreateCarLight(root.transform, "Siren_Blue", new Vector3( 0.36f, 1.78f, -0.08f), LightType.Point, Palette.HudWantedPolice, 16f, 14f);
             }
 
-            // Tire drift smoke particle systems on rear wheels (palette-tinted warm dust/smoke!)
-            ctrl.driftSmokeL = CreateDriftSmoke(root.transform, "DriftSmoke_L", new Vector3(-0.88f, 0.18f, -1.34f));
-            ctrl.driftSmokeR = CreateDriftSmoke(root.transform, "DriftSmoke_R", new Vector3( 0.88f, 0.18f, -1.34f));
+            // Driver Seat Pivot (snugly seated inside the bucket seat behind the steering wheel!)
+            var seatGo = new GameObject("DriverSeatPivot");
+            seatGo.transform.SetParent(root.transform, false);
+            float seatY = arch == VehicleArchetype.BeachSUV ? 0.04f : (arch == VehicleArchetype.Cabrio ? -0.10f : -0.14f);
+            seatGo.transform.localPosition = new Vector3(-0.36f, seatY, -0.18f);
+            seatGo.transform.localRotation = Quaternion.identity;
+            ctrl.driverSeatPivot = seatGo.transform;
+
+            // Tire drift smoke, dark rubber skidmark TrailRenderers & hard-collision sparks!
+            ctrl.driftSmokeL = CreateDriftSmoke(root.transform, "DriftSmoke_L", new Vector3(-0.86f, 0.16f, -1.32f));
+            ctrl.driftSmokeR = CreateDriftSmoke(root.transform, "DriftSmoke_R", new Vector3( 0.86f, 0.16f, -1.32f));
+            ctrl.skidTrailL  = CreateSkidTrail(root.transform, "SkidTrail_L", new Vector3(-0.82f, 0.06f, -1.32f), mats["Skidmark"]);
+            ctrl.skidTrailR  = CreateSkidTrail(root.transform, "SkidTrail_R", new Vector3( 0.82f, 0.06f, -1.32f), mats["Skidmark"]);
+            ctrl.crashSparks = CreateCrashSparks(root.transform, "CrashSparks");
 
             return root;
         }
@@ -1522,19 +1844,30 @@ namespace GtaPunta.Editor
             camPivot.transform.localPosition = new Vector3(0f, 1.48f, 0f);
             foot.cameraTargetPivot = camPivot.transform;
 
-            var charPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{ModelDir}/Char_Humanoid.fbx");
+            var charPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{ModelDir}/Char_Humanoid_v2.fbx");
             if (charPrefab != null)
             {
-                var model = (GameObject)PrefabUtility.InstantiatePrefab(charPrefab);
-                model.name = "Visual_Character";
-                model.transform.SetParent(root.transform, false);
-                UpgradeFbxMaterialsToUrp(model, mats);
-                // Orient humanoid facing LOCAL +Z (check sunglasses position in model's local space!)
-                var shades = FindDeep(model.transform, "Sunglasses_Bridge");
-                if (shades != null && model.transform.InverseTransformPoint(shades.position).z < 0f)
-                    model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                // Clean upright wrapper preserves the FBX's imported Z-up -> Y-up rotation while rotating cleanly around Y!
+                var visualWrap = new GameObject("Visual_Character");
+                visualWrap.transform.SetParent(root.transform, false);
 
-                foot.visualRoot = model.transform;
+                var model = (GameObject)PrefabUtility.InstantiatePrefab(charPrefab);
+                model.name = "Char_Model";
+                model.transform.SetParent(visualWrap.transform, false);
+                UpgradeFbxMaterialsToUrp(model, mats);
+
+                // Orient wrapper strictly so sunglasses face root's LOCAL +Z (keeping character upright!)
+                var shades = FindDeep(model.transform, "Sunglasses_Bridge");
+                if (shades != null)
+                {
+                    var sr = shades.GetComponent<Renderer>();
+                    Vector3 shadeCenter = sr != null ? sr.bounds.center : shades.position;
+                    float localZ = root.transform.InverseTransformPoint(shadeCenter).z;
+                    if (localZ < 0f)
+                        visualWrap.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                }
+
+                foot.visualRoot = visualWrap.transform;
                 foot.charAnim = model.AddComponent<ProceduralCharacterAnimator>();
             }
 
@@ -1544,16 +1877,24 @@ namespace GtaPunta.Editor
         private static GameObject BuildPedestrianTemplate()
         {
             var tpl = new GameObject("Pedestrian_Template");
-            var charPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{ModelDir}/Char_Humanoid.fbx");
+            var charPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{ModelDir}/Char_Humanoid_v2.fbx");
             if (charPrefab != null)
             {
+                var visualWrap = new GameObject("Visual");
+                visualWrap.transform.SetParent(tpl.transform, false);
+
                 var model = (GameObject)PrefabUtility.InstantiatePrefab(charPrefab);
-                model.name = "Visual";
-                model.transform.SetParent(tpl.transform, false);
+                model.name = "Char_Model";
+                model.transform.SetParent(visualWrap.transform, false);
                 UpgradeFbxMaterialsToUrp(model, null);
                 var shades = FindDeep(model.transform, "Sunglasses_Bridge");
-                if (shades != null && model.transform.InverseTransformPoint(shades.position).z < 0f)
-                    model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                if (shades != null)
+                {
+                    var sr = shades.GetComponent<Renderer>();
+                    Vector3 shadeCenter = sr != null ? sr.bounds.center : shades.position;
+                    if (tpl.transform.InverseTransformPoint(shadeCenter).z < 0f)
+                        visualWrap.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                }
                 model.AddComponent<ProceduralCharacterAnimator>();
             }
             tpl.AddComponent<PedestrianAI>();
@@ -1617,16 +1958,16 @@ namespace GtaPunta.Editor
             gpGo.AddComponent<CinemachineRotationComposer>();
             gpGo.AddComponent<CinemachineImpulseListener>();
 
-            // Title Cinematic Drone Camera framing Los Dedos (La Mano) & Playa Brava!
+            // Title Cinematic Drone Camera framing sunlit Los Dedos (La Mano v2), Punta Skyline & PureSky clouds!
             var titleGo = new GameObject("CM_TitleDroneCamera");
             titleGo.transform.SetParent(camRoot.transform);
             var titleCam = titleGo.AddComponent<CinemachineCamera>();
             titleCam.Priority = 30;
-            titleCam.Lens.FieldOfView = 52f;
+            titleCam.Lens.FieldOfView = 50f;
             titleCam.Lens.NearClipPlane = 0.3f;
             titleCam.Lens.FarClipPlane = 3800f;
-            titleGo.transform.position = new Vector3(774f, 14f, 492f);
-            titleGo.transform.LookAt(new Vector3(794.6f, 5.2f, 511.3f));
+            titleGo.transform.position = new Vector3(774f, 8.6f, 490f);
+            titleGo.transform.LookAt(new Vector3(794.6f, 11.4f, 511.3f));
 
             var rig = camRoot.AddComponent<GtaCameraRig>();
             rig.gameplayCam = gpCam;
@@ -1705,10 +2046,21 @@ namespace GtaPunta.Editor
             ctrl.sunLight = sun;
             ctrl.postVolume = vol;
             ctrl.skyboxMaterial = mats["Skybox"];
+            ctrl.skyboxDay = mats["SkyboxDay"];
+            ctrl.skyboxSunset = mats["SkyboxSunset"];
+            ctrl.skyboxNight = mats["SkyboxNight"];
+            ctrl.globalReflectionProbe = probe;
             ctrl.oceanMaterial = mats["Ocean"];
             ctrl.glassTowerMaterial = mats["GlassTower"];
             ctrl.gorleroFacadeMaterial = mats["Gorlero"];
             ctrl.villaFacadeMaterial = mats["Villa"];
+            ctrl.extraFacadeMaterials = new List<Material> { mats["BronzeTower"], mats["TerracottaRes"] };
+            ctrl.emissiveSignMaterials = new List<Material>
+            {
+                mats["Sign_Enjoy"], mats["Sign_ChurrosManolo"], mats["Sign_CafeGorlero"],
+                mats["Sign_Heladeria"], mats["Sign_CasinoNogaro"], mats["Sign_Boutique20"],
+                mats["Sign_ParrillaPuerto"], mats["Sign_YachtClub"]
+            };
             ctrl.faroBeaconRotor = extras.faroRotor;
             ctrl.faroSpotLight = extras.faroSpot;
             ctrl.faroBeamConeRenderer = extras.faroBeamCone;
@@ -1716,6 +2068,173 @@ namespace GtaPunta.Editor
             ctrl.ApplyMode(TimeOfDayMode.SunnyAfternoon);
 
             return ctrl;
+        }
+
+        // --- V2 SCENARIO, FOLIAGE & VFX HELPERS ---
+
+        private static void CreateGroundPad(Transform parent, string name, Vector3 pos, Vector3 scale, float yaw, Material mat)
+        {
+            // World-scale UV-tiled ground slab (eliminates ALL texture stretching on large plaza lawns & brick walkways!)
+            var mb = new MeshBuilder();
+            float hx = scale.x * 0.5f;
+            float hy = scale.y * 0.5f;
+            float hz = scale.z * 0.5f;
+            float uTile = Mathf.Max(1f, scale.x / 3.8f);
+            float vTile = Mathf.Max(1f, scale.z / 3.8f);
+
+            mb.AddQuadUp(
+                new Vector3(-hx, hy, -hz), new Vector3(-hx, hy,  hz),
+                new Vector3( hx, hy,  hz), new Vector3( hx, hy, -hz),
+                new Vector2(0f, 0f), new Vector2(0f, vTile), new Vector2(uTile, vTile), new Vector2(uTile, 0f));
+
+            // Clean thin side skirts
+            mb.AddQuadDoubleSided(new Vector3(-hx, hy, -hz), new Vector3(hx, hy, -hz), new Vector3(hx, -hy, -hz), new Vector3(-hx, -hy, -hz), Vector2.zero, new Vector2(uTile, 0), new Vector2(uTile, 0.1f), new Vector2(0, 0.1f));
+            mb.AddQuadDoubleSided(new Vector3(hx, hy, hz), new Vector3(-hx, hy, hz), new Vector3(-hx, -hy, hz), new Vector3(hx, -hy, hz), Vector2.zero, new Vector2(uTile, 0), new Vector2(uTile, 0.1f), new Vector2(0, 0.1f));
+            mb.AddQuadDoubleSided(new Vector3(hx, hy, -hz), new Vector3(hx, hy, hz), new Vector3(hx, -hy, hz), new Vector3(hx, -hy, -hz), Vector2.zero, new Vector2(vTile, 0), new Vector2(vTile, 0.1f), new Vector2(0, 0.1f));
+            mb.AddQuadDoubleSided(new Vector3(-hx, hy, hz), new Vector3(-hx, hy, -hz), new Vector3(-hx, -hy, -hz), new Vector3(-hx, -hy, hz), Vector2.zero, new Vector2(vTile, 0), new Vector2(vTile, 0.1f), new Vector2(0, 0.1f));
+
+            var mesh = mb.Build("Mesh_" + name);
+            SaveMeshAsset(mesh, "Mesh_" + name);
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.position = pos;
+            go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+            var bc = go.AddComponent<BoxCollider>();
+            bc.size = scale;
+        }
+
+        private static void CreateIlluminatedSignBoard(Transform parent, string name, Vector3 pos, float yaw, Vector2 size, Material signMat)
+        {
+            var root = new GameObject(name);
+            root.transform.SetParent(parent, false);
+            root.transform.position = pos;
+            root.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+
+            var frame = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            frame.name = "SignFrame";
+            UnityEngine.Object.DestroyImmediate(frame.GetComponent<Collider>());
+            frame.transform.SetParent(root.transform, false);
+            frame.transform.localScale = new Vector3(size.x + 0.24f, size.y + 0.24f, 0.22f);
+            frame.GetComponent<MeshRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>($"{MatDir}/Mat_DarkPlinth.mat");
+
+            var front = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            front.name = "SignFace_Front";
+            UnityEngine.Object.DestroyImmediate(front.GetComponent<Collider>());
+            front.transform.SetParent(root.transform, false);
+            front.transform.localPosition = new Vector3(0f, 0f, -0.125f);
+            front.transform.localScale = new Vector3(size.x, size.y, 1f);
+            front.GetComponent<MeshRenderer>().sharedMaterial = signMat;
+
+            var back = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            back.name = "SignFace_Back";
+            UnityEngine.Object.DestroyImmediate(back.GetComponent<Collider>());
+            back.transform.SetParent(root.transform, false);
+            back.transform.localPosition = new Vector3(0f, 0f, 0.125f);
+            back.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            back.transform.localScale = new Vector3(size.x, size.y, 1f);
+            back.GetComponent<MeshRenderer>().sharedMaterial = signMat;
+        }
+
+        private static void ApplySingleMaterial(GameObject root, Material mat)
+        {
+            if (root == null || mat == null) return;
+            foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(true))
+                mr.sharedMaterial = mat;
+        }
+
+        private static void ApplyPineMaterials(GameObject pine, Dictionary<string, Material> mats)
+        {
+            if (pine == null) return;
+            foreach (var mr in pine.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (mr.name.Contains("Canopy"))
+                    mr.sharedMaterial = mats["PineNeedles"];
+                else
+                    mr.sharedMaterial = mats["PalmBark"];
+            }
+        }
+
+        private static void ApplyDuneGrassMaterial(GameObject tuft, Dictionary<string, Material> mats)
+        {
+            if (tuft == null) return;
+            foreach (var mr in tuft.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                mr.sharedMaterial = mats["DuneGrass"];
+                mr.shadowCastingMode = ShadowCastingMode.Off;
+            }
+        }
+
+        private static void AttachWorkingTrafficLight(GameObject tlObj, float phaseOffset)
+        {
+            if (tlObj == null) return;
+            var ctrl = tlObj.AddComponent<TrafficLightController>();
+            ctrl.phaseOffset = phaseOffset;
+            ctrl.cycleDuration = 18f;
+
+            var baseMat = AssetDatabase.LoadAssetAtPath<Material>($"{MatDir}/Mat_DarkPlinth.mat");
+            Renderer MakeLens(string lensName, float yOff)
+            {
+                var sp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                sp.name = lensName;
+                UnityEngine.Object.DestroyImmediate(sp.GetComponent<Collider>());
+                sp.transform.SetParent(tlObj.transform, false);
+                sp.transform.localPosition = new Vector3(0f, yOff, 0.34f);
+                sp.transform.localScale = Vector3.one * 0.24f;
+                var mr = sp.GetComponent<MeshRenderer>();
+                if (baseMat != null) mr.sharedMaterial = baseMat;
+                return mr;
+            }
+            ctrl.redLens    = MakeLens("Lens_Red",    5.35f);
+            ctrl.yellowLens = MakeLens("Lens_Yellow", 5.02f);
+            ctrl.greenLens  = MakeLens("Lens_Green",  4.69f);
+        }
+
+        private static TrailRenderer CreateSkidTrail(Transform parent, string name, Vector3 localPos, Material skidMat)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            var tr = go.AddComponent<TrailRenderer>();
+            tr.time = 6.5f;
+            tr.startWidth = 0.26f;
+            tr.endWidth = 0.24f;
+            tr.minVertexDistance = 0.25f;
+            tr.alignment = LineAlignment.TransformZ;
+            go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            tr.sharedMaterial = skidMat;
+            tr.shadowCastingMode = ShadowCastingMode.Off;
+            tr.emitting = false;
+            return tr;
+        }
+
+        private static ParticleSystem CreateCrashSparks(Transform parent, string name)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.duration = 0.25f;
+            main.startLifetime = 0.35f;
+            main.startSpeed = 7.5f;
+            main.startSize = 0.14f;
+            main.gravityModifier = 1.4f;
+            main.startColor = Palette.HudGoldAccent;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var em = ps.emission;
+            em.rateOverTime = 0f;
+            em.SetBursts(new[] { new ParticleSystem.Burst(0f, 22) });
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.2f;
+            var pr = go.GetComponent<ParticleSystemRenderer>();
+            var pMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+            pMat.color = Palette.HudGoldAccent;
+            pr.sharedMaterial = pMat;
+            return ps;
         }
 
         // --- UTILITY HELPERS ---

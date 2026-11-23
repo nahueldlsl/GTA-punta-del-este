@@ -79,7 +79,8 @@ namespace GtaPunta.Wanted
             {
                 WantedStars = targetStars;
                 AudioManager.Instance?.PlayOneShot2D("Wanted_Alert", 0.72f);
-                GameManager.Instance?.hud?.ShowToast($"POLICÍA DE MALDONADO EN BÚSQUEDA ({WantedStars} ★)", Palette.HudWantedAlert, 3.2f);
+                string starWord = WantedStars == 1 ? "ESTRELLA" : "ESTRELLAS";
+                GameManager.Instance?.hud?.ShowToast($"POLICÍA DE MALDONADO EN BÚSQUEDA ({WantedStars} {starWord})", Palette.HudWantedAlert, 3.2f);
             }
 
             IsEvading = false;

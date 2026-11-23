@@ -11,6 +11,7 @@ namespace GtaPunta.Vehicles
         SportsGT,
         BeachSUV,
         CitySedan,
+        Taxi,
         PoliceCruiser
     }
 
@@ -47,13 +48,17 @@ namespace GtaPunta.Vehicles
         public Transform visualRL;
         public Transform visualRR;
 
-        [Header("Lights & Police")]
+        [Header("Lights, Seating & VFX")]
+        public Transform driverSeatPivot;
         public Light headLightL;
         public Light headLightR;
         public Light sirenRedLight;
         public Light sirenBlueLight;
         public ParticleSystem driftSmokeL;
         public ParticleSystem driftSmokeR;
+        public TrailRenderer skidTrailL;
+        public TrailRenderer skidTrailR;
+        public ParticleSystem crashSparks;
 
         public bool IsPlayerDriven { get; private set; }
         public float SpeedKmh { get; private set; }
@@ -61,6 +66,7 @@ namespace GtaPunta.Vehicles
         public int CurrentGear { get; private set; } = 1;
         public bool IsDrifting { get; private set; }
         public bool SirenActive { get; private set; }
+        public float CurrentSteer => _steer;
 
         private Rigidbody _rb;
         private AudioSource _engineAudio;
@@ -385,8 +391,11 @@ namespace GtaPunta.Vehicles
                 _sirenAudio.volume = Mathf.Lerp(_sirenAudio.volume, targetSiren, Time.deltaTime * 8f);
             }
 
-            EmitSmoke(driftSmokeL, IsDrifting && IsPlayerDriven);
-            EmitSmoke(driftSmokeR, IsDrifting && IsPlayerDriven);
+            bool showDrift = IsDrifting && IsPlayerDriven;
+            EmitSmoke(driftSmokeL, showDrift);
+            EmitSmoke(driftSmokeR, showDrift);
+            if (skidTrailL != null) skidTrailL.emitting = showDrift && wcRL != null && wcRL.isGrounded;
+            if (skidTrailR != null) skidTrailR.emitting = showDrift && wcRR != null && wcRR.isGrounded;
         }
 
         private static void EmitSmoke(ParticleSystem ps, bool active)
@@ -425,6 +434,11 @@ namespace GtaPunta.Vehicles
             {
                 AudioManager.Instance?.PlayOneShot2D("Crash_Impact", Mathf.Clamp01(impact / 22f) * 0.75f, 0.9f, 1.1f);
                 GameManager.Instance?.cameraRig?.TriggerImpactShake(Mathf.Clamp01(impact / 25f));
+                if (crashSparks != null && impact > 8.5f && collision.contactCount > 0)
+                {
+                    crashSparks.transform.position = collision.GetContact(0).point;
+                    crashSparks.Play();
+                }
 
                 // Trigger Wanted heat if player rams traffic or police cruisers recklessly!
                 var otherCar = collision.collider.GetComponentInParent<GtaVehicleController>();

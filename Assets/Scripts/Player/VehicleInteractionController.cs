@@ -41,7 +41,10 @@ namespace GtaPunta.Player
             {
                 NearbyVehicle = null;
                 if (CurrentVehicle != null)
+                {
                     transform.position = CurrentVehicle.transform.position;
+                    playerFoot?.charAnim?.SetLocomotionState(0f, true, CurrentVehicle.CurrentSteer, true);
+                }
             }
 
             var kb = Keyboard.current;
@@ -81,7 +84,13 @@ namespace GtaPunta.Player
             IsInVehicle = true;
             CurrentVehicle = vehicle;
 
-            if (playerFoot != null) playerFoot.ControlsEnabled = false;
+            if (playerFoot != null)
+            {
+                if (vehicle.driverSeatPivot != null)
+                    playerFoot.SetSeatedInVehicle(vehicle.driverSeatPivot);
+                else
+                    playerFoot.ControlsEnabled = false;
+            }
             vehicle.SetPlayerDriven(true);
 
             cameraRig?.SetVehicleTarget(vehicle.transform);
@@ -108,7 +117,7 @@ namespace GtaPunta.Player
 
             if (playerFoot != null)
             {
-                playerFoot.ControlsEnabled = true;
+                playerFoot.ClearSeatedInVehicle();
                 playerFoot.Teleport(exitPos, exitYaw);
                 cameraRig?.SetFootTarget(playerFoot.cameraTargetPivot != null ? playerFoot.cameraTargetPivot : playerFoot.transform);
                 AudioManager.Instance?.SetListenerTarget(playerFoot.transform);

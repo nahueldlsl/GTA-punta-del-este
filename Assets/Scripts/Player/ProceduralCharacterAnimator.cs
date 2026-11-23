@@ -138,13 +138,13 @@ namespace GtaPunta.Player
                 _head.localRotation = Quaternion.Euler(-leanAngleDeg * 0.4f * _blendSpeed, headYaw, 0f);
             }
 
-            // Arms & Forearms opposite to legs
+            // Arms & Forearms opposite to legs (relaxed coastal posture at idle!)
             float armA = (_isGrounded ? sinGait * armSwingDeg * _blendSpeed : -28f);
-            if (_armL != null) _armL.localRotation = Quaternion.Euler(-armA, 0f, 4f + idleBreath * 1.5f);
-            if (_armR != null) _armR.localRotation = Quaternion.Euler( armA, 0f, -4f - idleBreath * 1.5f);
+            if (_armL != null) _armL.localRotation = Quaternion.Euler(-armA, 0f, 8f + idleBreath * 1.5f);
+            if (_armR != null) _armR.localRotation = Quaternion.Euler( armA, 0f, -8f - idleBreath * 1.5f);
 
-            float elbowFlexL = _isGrounded ? Mathf.Lerp(10f, 48f, _blendSpeed * Mathf.Clamp01(sinGait * 0.5f + 0.5f)) : 32f;
-            float elbowFlexR = _isGrounded ? Mathf.Lerp(10f, 48f, _blendSpeed * Mathf.Clamp01(-sinGait * 0.5f + 0.5f)) : 32f;
+            float elbowFlexL = _isGrounded ? Mathf.Lerp(14f, 48f, _blendSpeed * Mathf.Clamp01(sinGait * 0.5f + 0.5f)) : 32f;
+            float elbowFlexR = _isGrounded ? Mathf.Lerp(14f, 48f, _blendSpeed * Mathf.Clamp01(-sinGait * 0.5f + 0.5f)) : 32f;
             if (_forearmL != null) _forearmL.localRotation = Quaternion.Euler(-elbowFlexL, 0f, 0f);
             if (_forearmR != null) _forearmR.localRotation = Quaternion.Euler(-elbowFlexR, 0f, 0f);
 
@@ -161,16 +161,18 @@ namespace GtaPunta.Player
 
         private void ApplySeatedPose()
         {
-            _hips.localPosition = _hipsBaseLocalPos + new Vector3(0f, -0.34f, 0f);
-            if (_spine != null) _spine.localRotation = Quaternion.Euler(-6f, 0f, 0f);
+            _hips.localPosition = _hipsBaseLocalPos;
+            _hips.localRotation = Quaternion.identity;
+            if (_spine != null) _spine.localRotation = Quaternion.Euler(-8f, _turnRate * 4f, -_turnRate * 4f);
+            if (_head != null) _head.localRotation = Quaternion.Euler(4f, _turnRate * 16f, 0f);
             if (_legL != null) _legL.localRotation = Quaternion.Euler(-82f, 0f, 0f);
             if (_legR != null) _legR.localRotation = Quaternion.Euler(-82f, 0f, 0f);
             if (_shinL != null) _shinL.localRotation = Quaternion.Euler(78f, 0f, 0f);
             if (_shinR != null) _shinR.localRotation = Quaternion.Euler(78f, 0f, 0f);
-            if (_armL != null) _armL.localRotation = Quaternion.Euler(-52f, 8f, 6f);
-            if (_armR != null) _armR.localRotation = Quaternion.Euler(-52f, -8f, -6f);
-            if (_forearmL != null) _forearmL.localRotation = Quaternion.Euler(-22f, 0f, 0f);
-            if (_forearmR != null) _forearmR.localRotation = Quaternion.Euler(-22f, 0f, 0f);
+            if (_armL != null) _armL.localRotation = Quaternion.Euler(-52f - _turnRate * 8f, 10f, 6f);
+            if (_armR != null) _armR.localRotation = Quaternion.Euler(-52f + _turnRate * 8f, -10f, -6f);
+            if (_forearmL != null) _forearmL.localRotation = Quaternion.Euler(-24f, 0f, 0f);
+            if (_forearmR != null) _forearmR.localRotation = Quaternion.Euler(-24f, 0f, 0f);
         }
     }
 }

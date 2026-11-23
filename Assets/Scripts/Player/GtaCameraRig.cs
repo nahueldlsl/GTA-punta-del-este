@@ -31,10 +31,10 @@ namespace GtaPunta.Player
         public float autoRecenterSpeed = 3.2f;
 
         [Header("Title Orbit")]
-        public Vector3 titleFocusPoint = new Vector3(794.6f, 4.2f, 511.3f); // Los Dedos / Playa Brava!
-        public float titleOrbitRadius = 26f;
-        public float titleOrbitHeight = 11f;
-        public float titleOrbitSpeed = 5.5f;
+        public Vector3 titleFocusPoint = new Vector3(794.6f, 7.8f, 511.3f); // Los Dedos / Playa Brava + Punta Skyline & PureSky!
+        public float titleOrbitRadius = 21f;
+        public float titleOrbitHeight = 6.4f;
+        public float titleOrbitSpeed = 4.8f;
 
         private Transform _currentTarget;
         private GtaVehicleController _activeVehicle;

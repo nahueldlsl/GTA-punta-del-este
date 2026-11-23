@@ -151,27 +151,39 @@ Shader "PuntaDelEste/OceanURP"
 
                 half ndotv = saturate(dot(normalWS, viewDirWS));
                 half fresnel = pow(1.0 - ndotv, _FresnelPower);
-                half3 reflColor = lerp(_SkyReflectColor.rgb, _HorizonGlowColor.rgb, saturate(pow(1.0 - ndotv, 2.2) * 0.55));
+
+                // Real URP HDRI Environment Cubemap reflection (reflects PureSky clouds, sunset coral & night stars!)
+                half3 reflectDir = reflect(-viewDirWS, normalWS);
+                reflectDir.y = max(reflectDir.y, 0.04);
+                half envRough = lerp(0.04, 0.22, IN.bravaFactor);
+                half3 envRefl = GlossyEnvironmentReflection(reflectDir, envRough, 1.0);
+                half3 fallbackSky = lerp(_SkyReflectColor.rgb, _HorizonGlowColor.rgb, saturate(pow(1.0 - ndotv, 2.2) * 0.55));
+                half3 reflColor = lerp(fallbackSky, envRefl, 0.78);
+
+                // Beer-Lambert subtle subsurface turquoise scatter in translucent shallow waves
+                half sss = pow(saturate(dot(viewDirWS, -lightDir + normalWS * 0.45)), 3.0) * (1.0 - depthT * 0.65) * 0.35;
+                half3 sssCol = lerp(half3(0.10, 0.58, 0.64), half3(0.06, 0.46, 0.56), IN.bravaFactor) * mainLight.color * sss;
 
                 half3 halfVec = normalize(lightDir + viewDirWS);
-                float specPow = lerp(280.0, 110.0, IN.bravaFactor) * _Smoothness;
-                half spec = pow(saturate(dot(normalWS, halfVec)), specPow) * 2.4;
+                float specPow = lerp(340.0, 125.0, IN.bravaFactor) * _Smoothness;
+                half spec = pow(saturate(dot(normalWS, halfVec)), specPow) * 2.8;
                 half3 specCol = mainLight.color * spec * _HorizonGlowColor.rgb;
 
-                // Animated shoreline breaking surf bands (dramatically richer on Playa Brava!)
-                float foamRange = _FoamDepth * lerp(0.65, _BravaFoamBoost, IN.bravaFactor);
+                // Animated shoreline breaking surf bands (dramatically richer multi-band whitewash on Playa Brava!)
+                float foamRange = _FoamDepth * lerp(0.55, _BravaFoamBoost * 1.15, IN.bravaFactor);
                 float shoreMask = 1.0 - saturate(waterDepth / max(foamRange, 0.1));
-                float surfWave = sin(waterDepth * 2.8 - t * (2.2 + IN.bravaFactor * 1.4) + (nA.x + nB.y) * 3.2);
-                float foamBands = smoothstep(0.10, 0.68, shoreMask + surfWave * 0.34 * shoreMask);
-                float contactFoam = smoothstep(0.65, 0.0, waterDepth);
-                float whitecaps = smoothstep(0.56, 0.85, nA.x * 0.6 + nB.y * 0.5 + 0.35) * IN.bravaFactor * 0.38 * distFade;
+                float surfWave1 = sin(waterDepth * 3.1 - t * (2.3 + IN.bravaFactor * 1.5) + (nA.x + nB.y) * 3.4);
+                float surfWave2 = sin(waterDepth * 5.8 - t * (3.1 + IN.bravaFactor * 1.8) - nC.x * 4.0);
+                float foamBands = smoothstep(0.12, 0.68, shoreMask + (surfWave1 * 0.26 + surfWave2 * 0.12) * shoreMask);
+                float contactFoam = smoothstep(0.70, 0.0, waterDepth);
+                float whitecaps = smoothstep(0.54, 0.84, nA.x * 0.6 + nB.y * 0.5 + 0.35) * IN.bravaFactor * 0.44 * distFade;
                 float foam = saturate(max(max(foamBands, contactFoam), whitecaps));
 
                 half ndotl = saturate(dot(normalWS, lightDir)) * 0.52 + 0.48;
-                half3 col = waterCol.rgb * ndotl;
-                col = lerp(col, reflColor, fresnel * lerp(0.76, 0.54, IN.bravaFactor));
+                half3 col = waterCol.rgb * ndotl + sssCol;
+                col = lerp(col, reflColor, fresnel * lerp(0.84, 0.62, IN.bravaFactor));
                 col += specCol;
-                col = lerp(col, _FoamColor.rgb * (mainLight.color * 0.68 + 0.32), foam * 0.92);
+                col = lerp(col, _FoamColor.rgb * (mainLight.color * 0.72 + 0.28), foam * 0.94);
 
                 half alpha = saturate(max(waterCol.a * smoothstep(0.0, 0.42, waterDepth), foam * 0.94));
                 col = MixFog(col, IN.fogCoord);

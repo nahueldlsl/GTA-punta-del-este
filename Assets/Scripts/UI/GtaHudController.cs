@@ -46,13 +46,21 @@ namespace GtaPunta.UI
         // Title animation
         private TextMeshProUGUI _titlePromptText;
 
-        // Minimap elements
+        // Minimap elements (GTA V-style rotating radar + orbiting N compass + status bars)
+        private RectTransform _minimapRotatePivot;
         private RectTransform _minimapImageRect;
         private RectTransform _minimapPlayerArrow;
         private RectTransform _minimapBlipsParent;
+        private RectTransform _compassNorthRect;
+        private Image _staminaBarFill;
+        private float _smoothMapYaw;
         private TextMeshProUGUI _districtText;
         private readonly List<RectTransform> _landmarkMiniBlips = new List<RectTransform>();
         private readonly List<Image> _policeMiniBlips = new List<Image>();
+
+        // Smooth transition fade veil
+        private Image _fadeVeil;
+        private float _fadeAlpha;
 
         // Full map player marker
         private RectTransform _fullMapPlayerDot;
@@ -113,6 +121,12 @@ namespace GtaPunta.UI
             BuildPauseScreen();
             BuildFullMapScreen();
             BuildBustedScreen();
+
+            // Smooth full-screen black transition veil (non-blocking)
+            var fadeGo = CreatePanel("TransitionFadeVeil", transform, new Color(0.03f, 0.05f, 0.08f, 0f),
+                Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+            _fadeVeil = fadeGo.GetComponent<Image>();
+            _fadeVeil.raycastTarget = false;
 
             SetLayerRecursive(transform, LayerMask.NameToLayer("UI"));
             ApplyState(GameState.Title);
@@ -247,9 +261,9 @@ namespace GtaPunta.UI
             hrt.anchorMin = Vector2.zero; hrt.anchorMax = Vector2.one;
             hrt.offsetMin = Vector2.zero; hrt.offsetMax = Vector2.zero;
 
-            // --- 1. BOTTOM-LEFT MINIMAP ---
+            // --- 1. BOTTOM-LEFT GTA V-STYLE ROTATING MINIMAP ---
             var miniFrame = CreatePanel("MinimapFrame", _hudRoot.transform, Palette.HudPanelBg,
-                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(28f, 64f), new Vector2(268f, 208f));
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(28f, 76f), new Vector2(268f, 198f));
             var border = miniFrame.AddComponent<Outline>();
             border.effectColor = Palette.HudPanelBorder;
             border.effectDistance = new Vector2(2.5f, -2.5f);
@@ -261,8 +275,16 @@ namespace GtaPunta.UI
             mrt.offsetMin = new Vector2(6f, 6f); mrt.offsetMax = new Vector2(-6f, -6f);
             maskGo.AddComponent<RectMask2D>();
 
+            // Rotation pivot centered inside minimap viewport so map smoothly rotates around player heading!
+            var rotGo = new GameObject("MinimapRotatePivot");
+            rotGo.transform.SetParent(maskGo.transform, false);
+            _minimapRotatePivot = rotGo.AddComponent<RectTransform>();
+            _minimapRotatePivot.anchorMin = new Vector2(0.5f, 0.5f);
+            _minimapRotatePivot.anchorMax = new Vector2(0.5f, 0.5f);
+            _minimapRotatePivot.sizeDelta = Vector2.zero;
+
             var mapImgGo = new GameObject("MinimapTexture");
-            mapImgGo.transform.SetParent(maskGo.transform, false);
+            mapImgGo.transform.SetParent(rotGo.transform, false);
             _minimapImageRect = mapImgGo.AddComponent<RectTransform>();
             _minimapImageRect.anchorMin = new Vector2(0.5f, 0.5f);
             _minimapImageRect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -272,7 +294,7 @@ namespace GtaPunta.UI
             rawMap.texture = _mapTexture;
             rawMap.color = Color.white;
 
-            // Dynamic Blips Parent attached to map texture so blips track exact map coordinates!
+            // Dynamic Blips Parent attached to map texture so blips track & rotate cleanly!
             var blipsGo = new GameObject("BlipsLayer");
             blipsGo.transform.SetParent(mapImgGo.transform, false);
             _minimapBlipsParent = blipsGo.AddComponent<RectTransform>();
@@ -289,7 +311,7 @@ namespace GtaPunta.UI
                 _policeMiniBlips.Add(pImg);
             }
 
-            // Center Gold Player Arrow
+            // Center Gold Player Arrow (always points UP while world rotates beneath it, classic GTA V!)
             var arrowGo = new GameObject("PlayerArrow");
             arrowGo.transform.SetParent(maskGo.transform, false);
             _minimapPlayerArrow = arrowGo.AddComponent<RectTransform>();
@@ -300,11 +322,27 @@ namespace GtaPunta.UI
             aImg.sprite = CreateArrowSprite();
             aImg.color = Palette.HudGoldAccent;
 
-            // North compass tag on minimap
-            CreateText("CompassN", miniFrame.transform, "N", 14f, Palette.HudCyanAccent, TextAlignmentOptions.Center,
-                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -12f), new Vector2(28f, 20f), FontStyles.Bold);
+            // Orbiting North compass badge pinned along minimap bezel
+            var nPill = CreatePanel("CompassNBadge", miniFrame.transform, new Color(0.05f, 0.09f, 0.14f, 0.92f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 94f), new Vector2(22f, 20f));
+            _compassNorthRect = nPill.GetComponent<RectTransform>();
+            CreateText("CompassN", nPill.transform, "N", 13f, Palette.HudCyanAccent, TextAlignmentOptions.Center,
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, FontStyles.Bold);
 
-            // District / Street Name Banner directly below minimap
+            // GTA V-style compact Health (green) & Sprint Stamina (cyan) bar strip directly under minimap!
+            var barsBg = CreatePanel("StatusBarsBg", _hudRoot.transform, Palette.HudPanelBg,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(28f, 62f), new Vector2(268f, 10f));
+            CreatePanel("HealthBar", barsBg.transform, Palette.HudSuccess,
+                new Vector2(0f, 0.15f), new Vector2(0.49f, 0.85f), new Vector2(0f, 0.5f), Vector2.zero, Vector2.zero);
+            var stamBg = CreatePanel("StaminaBg", barsBg.transform, new Color(0.14f, 0.20f, 0.28f, 0.85f),
+                new Vector2(0.51f, 0.15f), new Vector2(1f, 0.85f), new Vector2(0f, 0.5f), Vector2.zero, Vector2.zero);
+            var stamFill = CreatePanel("StaminaFill", stamBg.transform, Palette.HudCyanAccent,
+                Vector2.zero, Vector2.one, new Vector2(0f, 0.5f), Vector2.zero, Vector2.zero);
+            _staminaBarFill = stamFill.GetComponent<Image>();
+            _staminaBarFill.type = Image.Type.Filled;
+            _staminaBarFill.fillMethod = Image.FillMethod.Horizontal;
+
+            // District / Street Name Banner directly below status bars
             var distPanel = CreatePanel("DistrictBanner", _hudRoot.transform, Palette.HudPanelBg,
                 new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(28f, 24f), new Vector2(268f, 34f));
             CreatePanel("DistAccent", distPanel.transform, Palette.HudCyanAccent, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(4f, 0f));
@@ -592,7 +630,15 @@ namespace GtaPunta.UI
             if (_bustedPanel != null) _bustedPanel.SetActive(state == GameState.Busted);
 
             if (state == GameState.Playing)
+            {
                 EnsureLandmarkMinimapPins();
+                TriggerTransitionFade(0.55f);
+            }
+        }
+
+        public void TriggerTransitionFade(float peakAlpha = 0.65f)
+        {
+            _fadeAlpha = Mathf.Max(_fadeAlpha, peakAlpha);
         }
 
         public void ShowToast(string message, Color accentColor, float duration = 3.2f)
@@ -628,6 +674,15 @@ namespace GtaPunta.UI
 
         private void Update()
         {
+            // Smooth transition fade veil decay (always ticks cleanly even when paused!)
+            if (_fadeVeil != null && _fadeAlpha > 0.001f)
+            {
+                _fadeAlpha = Mathf.MoveTowards(_fadeAlpha, 0f, Time.unscaledDeltaTime * 2.6f);
+                var fc = _fadeVeil.color;
+                fc.a = _fadeAlpha;
+                _fadeVeil.color = fc;
+            }
+
             var gm = GameManager.Instance;
             if (gm == null) return;
 
@@ -650,17 +705,34 @@ namespace GtaPunta.UI
 
             if (gm.CurrentState != GameState.Playing) return;
 
-            // 1. Minimap pan & heading arrow
+            // 1. GTA V-Style Rotating Minimap + Orbiting North Compass + Stamina Bar
             if (_minimapImageRect != null)
             {
                 Vector2 playerPx = WorldToMapPixel(playerPos, MinimapTexSize);
                 _minimapImageRect.anchoredPosition = -playerPx;
             }
+            float targetHeading = Camera.main != null ? Camera.main.transform.eulerAngles.y : gm.GetActivePlayerTransform().eulerAngles.y;
+            _smoothMapYaw = Mathf.LerpAngle(_smoothMapYaw, targetHeading, Time.deltaTime * 10f);
+            if (_minimapRotatePivot != null)
+                _minimapRotatePivot.localRotation = Quaternion.Euler(0f, 0f, _smoothMapYaw);
             if (_minimapPlayerArrow != null)
             {
-                float heading = gm.GetActivePlayerTransform().eulerAngles.y;
-                _minimapPlayerArrow.localRotation = Quaternion.Euler(0f, 0f, -heading);
+                float relHeading = Mathf.DeltaAngle(_smoothMapYaw, gm.GetActivePlayerTransform().eulerAngles.y);
+                _minimapPlayerArrow.localRotation = Quaternion.Euler(0f, 0f, -relHeading);
             }
+            if (_compassNorthRect != null)
+            {
+                float rad = _smoothMapYaw * Mathf.Deg2Rad;
+                // Direction of world North (+Z) in rotated minimap screen space
+                Vector2 dir = new Vector2(-Mathf.Sin(rad), Mathf.Cos(rad));
+                float halfW = 124f;
+                float halfH = 90f;
+                float sx = Mathf.Abs(dir.x) > 0.001f ? halfW / Mathf.Abs(dir.x) : 999f;
+                float sy = Mathf.Abs(dir.y) > 0.001f ? halfH / Mathf.Abs(dir.y) : 999f;
+                _compassNorthRect.anchoredPosition = dir * Mathf.Min(sx, sy);
+            }
+            if (_staminaBarFill != null && gm.playerFoot != null)
+                _staminaBarFill.fillAmount = gm.playerFoot.StaminaNormalized;
             if (_districtText != null)
                 _districtText.text = gm.CurrentDistrict.ToUpperInvariant();
 
@@ -740,7 +812,7 @@ namespace GtaPunta.UI
                     _rpmFill.fillAmount = car.RpmNormalized;
                     _rpmFill.color = car.RpmNormalized > 0.85f ? Palette.HudWantedAlert : (car.RpmNormalized > 0.62f ? Palette.HudGoldAccent : Palette.HudCyanAccent);
                 }
-                string badge = car.IsDrifting ? "DRIFT" : (car.SirenActive ? "SIRENA" : (AudioManager.Instance != null && AudioManager.Instance.RadioEnabled ? "PUNTA FM" : "RADIO OFF"));
+                string badge = car.IsDrifting ? "DRIFT" : (car.SirenActive ? "SIRENA" : (AudioManager.Instance != null ? AudioManager.Instance.RadioShortBadge : "RADIO OFF"));
                 _vehicleBadgesText.text = badge;
             }
 

@@ -198,7 +198,7 @@ namespace GtaPunta.Core
                     if (kb.vKey.wasPressedThisFrame && AudioManager.Instance != null)
                     {
                         AudioManager.Instance.ToggleRadio();
-                        hud?.ShowToast(AudioManager.Instance.RadioEnabled ? "RADIO: PUNTA SUMMER FM" : "RADIO APAGADA", Palette.HudGoldAccent);
+                        hud?.ShowToast("RADIO: " + AudioManager.Instance.RadioStationName, Palette.HudGoldAccent);
                     }
                     if (kb.kKey.wasPressedThisFrame)
                     {
@@ -290,12 +290,12 @@ namespace GtaPunta.Core
             Vector3 target = lm.position + Vector3.up * 0.6f;
             float yaw = lm.teleportYaw;
             // Curated scenic clear-ground viewpoints framing every iconic landmark!
-            if (lm.id == "el_faro") { target = new Vector3(-464f, 0f, -658f); yaw = -132f; }
+            if (lm.id == "el_faro") { target = new Vector3(-448f, 0f, -648f); yaw = -132f; }
             else if (lm.id == "los_dedos") { target = new Vector3(742f, 0f, 526f); yaw = 110f; }
             else if (lm.id == "iglesia_candelaria") { target = new Vector3(-408f, 0f, -678f); yaw = 185f; }
-            else if (lm.id == "puerto") { target = new Vector3(-436f, 0f, -156f); yaw = -18f; }
+            else if (lm.id == "puerto") { target = new Vector3(-436f, 0f, -158f); yaw = -16f; }
             else if (lm.id == "plaza_artigas") { target = new Vector3(236f, 0f, -44f); yaw = 224f; }
-            else if (lm.id == "punta_salinas") { target = new Vector3(-470f, 0f, -922f); yaw = 198f; }
+            else if (lm.id == "punta_salinas") { target = new Vector3(-508f, 0f, -1022f); yaw = 186f; }
 
             target.y = SampleGroundY(target) + 0.45f;
             TeleportPlayerTo(target, yaw);

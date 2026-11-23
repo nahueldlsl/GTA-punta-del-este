@@ -24,10 +24,16 @@ namespace GtaPunta.Atmosphere
         public Light sunLight;
         public Volume postVolume;
         public Material skyboxMaterial;
+        public Material skyboxDay;
+        public Material skyboxSunset;
+        public Material skyboxNight;
+        public ReflectionProbe globalReflectionProbe;
         public Material oceanMaterial;
         public Material glassTowerMaterial;
         public Material gorleroFacadeMaterial;
         public Material villaFacadeMaterial;
+        public List<Material> extraFacadeMaterials = new List<Material>();
+        public List<Material> emissiveSignMaterials = new List<Material>();
         public Transform faroBeaconRotor;
         public Light faroSpotLight;
         public Renderer faroBeamConeRenderer;
@@ -147,26 +153,55 @@ namespace GtaPunta.Atmosphere
                 sunLight.intensity = sunIntensity;
             }
 
-            RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = ambSky;
-            RenderSettings.ambientEquatorColor = ambEq;
-            RenderSettings.ambientGroundColor = ambGnd;
+            // Pick real Poly Haven PureSky Panoramic HDRI skybox when assigned
+            Material activeSky = mode switch
+            {
+                TimeOfDayMode.MansaSunset  => skyboxSunset != null ? skyboxSunset : skyboxMaterial,
+                TimeOfDayMode.CoastalNight => skyboxNight != null ? skyboxNight : skyboxMaterial,
+                _                          => skyboxDay != null ? skyboxDay : skyboxMaterial
+            };
+
+            if (activeSky != null)
+            {
+                if (activeSky.HasProperty("_SkyTint")) activeSky.SetColor("_SkyTint", skyTop);
+                if (activeSky.HasProperty("_GroundColor")) activeSky.SetColor("_GroundColor", skyHoriz);
+                if (activeSky.HasProperty("_AtmosphereThickness"))
+                    activeSky.SetFloat("_AtmosphereThickness", mode == TimeOfDayMode.MansaSunset ? 1.55f : (mode == TimeOfDayMode.CoastalNight ? 0.35f : 0.95f));
+                if (activeSky.HasProperty("_Exposure"))
+                {
+                    bool isPanoramic = activeSky.shader != null && activeSky.shader.name.Contains("Panoramic");
+                    float expVal = isPanoramic
+                        ? (mode == TimeOfDayMode.CoastalNight ? 0.85f : (mode == TimeOfDayMode.MansaSunset ? 1.15f : 1.05f))
+                        : (mode == TimeOfDayMode.CoastalNight ? 0.28f : (mode == TimeOfDayMode.MansaSunset ? 1.15f : 1.25f));
+                    activeSky.SetFloat("_Exposure", expVal);
+                }
+                RenderSettings.skybox = activeSky;
+            }
+
+            bool hasPanoramicSky = activeSky != null && activeSky.shader != null && activeSky.shader.name.Contains("Panoramic");
+            if (hasPanoramicSky)
+            {
+                RenderSettings.ambientMode = AmbientMode.Skybox;
+                RenderSettings.ambientIntensity = mode == TimeOfDayMode.CoastalNight ? 0.72f : (mode == TimeOfDayMode.MansaSunset ? 0.92f : 1.05f);
+                RenderSettings.defaultReflectionMode = DefaultReflectionMode.Skybox;
+                RenderSettings.reflectionIntensity = mode == TimeOfDayMode.CoastalNight ? 0.65f : 1.0f;
+            }
+            else
+            {
+                RenderSettings.ambientMode = AmbientMode.Trilight;
+                RenderSettings.ambientSkyColor = ambSky;
+                RenderSettings.ambientEquatorColor = ambEq;
+                RenderSettings.ambientGroundColor = ambGnd;
+            }
+
+            DynamicGI.UpdateEnvironment();
+            if (globalReflectionProbe != null)
+                globalReflectionProbe.RenderProbe();
 
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = fogCol;
             RenderSettings.fogDensity = fogDensity;
-
-            if (skyboxMaterial != null)
-            {
-                if (skyboxMaterial.HasProperty("_SkyTint")) skyboxMaterial.SetColor("_SkyTint", skyTop);
-                if (skyboxMaterial.HasProperty("_GroundColor")) skyboxMaterial.SetColor("_GroundColor", skyHoriz);
-                if (skyboxMaterial.HasProperty("_AtmosphereThickness"))
-                    skyboxMaterial.SetFloat("_AtmosphereThickness", mode == TimeOfDayMode.MansaSunset ? 1.55f : (mode == TimeOfDayMode.CoastalNight ? 0.35f : 0.95f));
-                if (skyboxMaterial.HasProperty("_Exposure"))
-                    skyboxMaterial.SetFloat("_Exposure", mode == TimeOfDayMode.CoastalNight ? 0.28f : (mode == TimeOfDayMode.MansaSunset ? 1.15f : 1.25f));
-                RenderSettings.skybox = skyboxMaterial;
-            }
 
             if (oceanMaterial != null)
             {
@@ -174,14 +209,21 @@ namespace GtaPunta.Atmosphere
                 oceanMaterial.SetColor("_HorizonGlowColor", oceanHoriz);
             }
 
-            UpdateEmission(glassTowerMaterial, new Color(1.0f, 0.86f, 0.60f) * windowEmit);
+            Color warmGlow = new Color(1.0f, 0.86f, 0.60f) * windowEmit;
+            UpdateEmission(glassTowerMaterial, warmGlow);
             UpdateEmission(gorleroFacadeMaterial, new Color(1.0f, 0.82f, 0.54f) * windowEmit);
             UpdateEmission(villaFacadeMaterial, new Color(1.0f, 0.80f, 0.48f) * windowEmit);
+            foreach (var extraMat in extraFacadeMaterials)
+                UpdateEmission(extraMat, warmGlow);
+
+            float signEmit = mode == TimeOfDayMode.CoastalNight ? 1.85f : (mode == TimeOfDayMode.MansaSunset ? 0.95f : 0.12f);
+            foreach (var signMat in emissiveSignMaterials)
+                UpdateEmission(signMat, Color.white * signEmit);
 
             if (faroSpotLight != null)
             {
                 faroSpotLight.enabled = nightLights;
-                faroSpotLight.intensity = mode == TimeOfDayMode.CoastalNight ? 1800f : 650f;
+                faroSpotLight.intensity = mode == TimeOfDayMode.CoastalNight ? 1600f : 550f;
             }
             if (faroBeamConeRenderer != null)
             {

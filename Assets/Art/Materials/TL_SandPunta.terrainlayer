@@ -7,10 +7,10 @@ TerrainLayer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: TL_SandPunta
-  m_DiffuseTexture: {fileID: 2800000, guid: b8b957b775008f445a9e19a5ac150820, type: 3}
-  m_NormalMapTexture: {fileID: 2800000, guid: ecafce1c1c6aead43bc70c2b4c5cdb6b, type: 3}
+  m_DiffuseTexture: {fileID: 2800000, guid: 09103398e2c2b2249abeca4721accefc, type: 3}
+  m_NormalMapTexture: {fileID: 2800000, guid: 8803b91c21587f14797d5372b4e16440, type: 3}
   m_MaskMapTexture: {fileID: 0}
-  m_TileSize: {x: 14, y: 14}
+  m_TileSize: {x: 12, y: 12}
   m_TileOffset: {x: 0, y: 0}
   m_Specular: {r: 0, g: 0, b: 0, a: 0}
   m_Metallic: 0

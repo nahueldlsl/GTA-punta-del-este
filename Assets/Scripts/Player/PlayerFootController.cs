@@ -34,11 +34,18 @@ namespace GtaPunta.Player
         private Vector3 _lastSafeShorePos;
         private float _lastYaw;
         private bool _controlsEnabled = true;
+        private Transform _visualOriginalParent;
+        private Vector3 _visualOriginalLocalPos;
+        private Quaternion _visualOriginalLocalRot;
+        private bool _isSeatedInCar;
+        private float _stamina = 1f;
 
         // Clean verification/debug input hook (non-intrusive, zero effect unless invoked)
         private Vector2 _debugMoveInput;
         private bool _debugSprint;
         private float _debugInputExpiry;
+
+        public float StaminaNormalized => _stamina;
 
         public bool ControlsEnabled
         {
@@ -47,8 +54,44 @@ namespace GtaPunta.Player
             {
                 _controlsEnabled = value;
                 if (_cc != null) _cc.enabled = value;
-                if (visualRoot != null) visualRoot.gameObject.SetActive(value);
+                if (visualRoot != null && !_isSeatedInCar) visualRoot.gameObject.SetActive(value);
             }
+        }
+
+        public void SetSeatedInVehicle(Transform seatPivot)
+        {
+            _isSeatedInCar = true;
+            _controlsEnabled = false;
+            if (_cc != null) _cc.enabled = false;
+            if (visualRoot != null && seatPivot != null)
+            {
+                if (_visualOriginalParent == null)
+                {
+                    _visualOriginalParent = visualRoot.parent;
+                    _visualOriginalLocalPos = visualRoot.localPosition;
+                    _visualOriginalLocalRot = visualRoot.localRotation;
+                }
+                visualRoot.gameObject.SetActive(true);
+                visualRoot.SetParent(seatPivot, false);
+                visualRoot.localPosition = Vector3.zero;
+                visualRoot.localRotation = _visualOriginalLocalRot;
+            }
+            charAnim?.SetLocomotionState(0f, true, 0f, true);
+        }
+
+        public void ClearSeatedInVehicle()
+        {
+            _isSeatedInCar = false;
+            if (visualRoot != null && _visualOriginalParent != null)
+            {
+                visualRoot.SetParent(_visualOriginalParent, false);
+                visualRoot.localPosition = _visualOriginalLocalPos;
+                visualRoot.localRotation = _visualOriginalLocalRot;
+                visualRoot.gameObject.SetActive(true);
+            }
+            charAnim?.SetLocomotionState(0f, true, 0f, false);
+            _controlsEnabled = true;
+            if (_cc != null) _cc.enabled = true;
         }
 
         public float CurrentSpeed => new Vector3(_horizontalVel.x, 0f, _horizontalVel.z).magnitude;
@@ -113,10 +156,14 @@ namespace GtaPunta.Player
             Vector3 moveDir = (camFwd * input.y + camRight * input.x);
             if (moveDir.sqrMagnitude > 1f) moveDir.Normalize();
 
+            // Stamina regen / sprint drain
+            bool activelySprinting = sprint && moveDir.sqrMagnitude > 0.05f && _stamina > 0.05f;
+            _stamina = Mathf.Clamp01(_stamina + (activelySprinting ? -0.14f : 0.24f) * dt);
+
             // Shallow beach water wading slowdown
             bool inShallowWater = transform.position.y < 0.25f;
             float speedMul = inShallowWater ? 0.65f : 1f;
-            float targetSpeed = (sprint ? sprintSpeed : walkSpeed) * speedMul;
+            float targetSpeed = (activelySprinting ? sprintSpeed : walkSpeed) * speedMul;
             Vector3 desiredVel = moveDir * targetSpeed;
 
             _horizontalVel = Vector3.Lerp(_horizontalVel, desiredVel, dt * acceleration);

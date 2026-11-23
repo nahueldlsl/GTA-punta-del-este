@@ -103,12 +103,14 @@ namespace GtaPunta.AI
                 }
             }
 
+            bool redLightAhead = TrafficLightController.ShouldStopForRedLight(transform.position, transform.forward);
+
             float cornerSlow = Mathf.Lerp(1f, 0.45f, Mathf.Clamp01(Mathf.Abs(signedAngle) / 55f));
             float desiredSpeed = cruiseSpeedKmh * cornerSlow;
             float throttle = 0f;
             bool brake = false;
 
-            if (obstacleAhead)
+            if (obstacleAhead || redLightAhead)
             {
                 throttle = -0.6f;
                 brake = true;
@@ -120,7 +122,7 @@ namespace GtaPunta.AI
 
             _vehicle.SetAIInputs(throttle, steer, brake);
 
-            if (_vehicle.SpeedKmh < 1.2f && !obstacleAhead)
+            if (_vehicle.SpeedKmh < 1.2f && !obstacleAhead && !redLightAhead)
             {
                 _stuckTimer += Time.deltaTime;
                 if (_stuckTimer > 6f)
