@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Mat_PuntaOcean
+  m_Shader: {fileID: 4800000, guid: a5a289f7bdc714440b7f0b309c311978, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _NormalMapA:
+        m_Texture: {fileID: 2800000, guid: 33dbeee2aef6ec44a9f2c95f6bb704d2, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalMapB:
+        m_Texture: {fileID: 2800000, guid: 9ba2008d1ed90324bacd023375c12415, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _BravaFoamBoost: 1.65
+    - _BravaWaveAmp: 0.42
+    - _FoamDepth: 2.6
+    - _FresnelPower: 4.2
+    - _MansaWaveAmp: 0.09
+    - _NormalStrength: 0.55
+    - _NormalTiling: 0.022
+    - _Smoothness: 0.92
+    - _WaveSpeed: 1.05
+    m_Colors:
+    - _BravaDeepColor: {r: 0.039215688, g: 0.19215687, b: 0.36078432, a: 0.99}
+    - _BravaShallowColor: {r: 0.101960786, g: 0.47843137, b: 0.61960787, a: 0.94}
+    - _FoamColor: {r: 0.93333334, g: 0.9647059, b: 0.98039216, a: 1}
+    - _HorizonGlowColor: {r: 1, g: 0.94509804, b: 0.8392157, a: 1}
+    - _MansaDeepColor: {r: 0.05882353, g: 0.3019608, b: 0.4509804, a: 0.97}
+    - _MansaShallowColor: {r: 0.14117648, g: 0.5803922, b: 0.6784314, a: 0.9}
+    - _SkyReflectColor: {r: 0.46, g: 0.74, b: 0.94, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
